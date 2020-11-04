@@ -1,0 +1,7 @@
+domain: gbase.cn
+repo: Gbase8sCluster
+resources:
+- group: gbase8s
+  kind: Gbase8sCluster
+  version: v1
+version: "2"

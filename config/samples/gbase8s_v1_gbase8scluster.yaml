@@ -1,0 +1,7 @@
+apiVersion: gbase8s.gbase.cn/v1
+kind: Gbase8sCluster
+metadata:
+  name: gbase8scluster-sample
+spec:
+  # Add fields here
+  foo: bar

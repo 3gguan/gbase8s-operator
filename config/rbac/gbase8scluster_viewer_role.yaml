@@ -1,0 +1,20 @@
+# permissions for end users to view gbase8sclusters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gbase8scluster-viewer-role
+rules:
+- apiGroups:
+  - gbase8s.gbase.cn
+  resources:
+  - gbase8sclusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gbase8s.gbase.cn
+  resources:
+  - gbase8sclusters/status
+  verbs:
+  - get

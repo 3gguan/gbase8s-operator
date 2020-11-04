@@ -1,0 +1,24 @@
+# permissions for end users to edit gbase8sclusters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gbase8scluster-editor-role
+rules:
+- apiGroups:
+  - gbase8s.gbase.cn
+  resources:
+  - gbase8sclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gbase8s.gbase.cn
+  resources:
+  - gbase8sclusters/status
+  verbs:
+  - get
