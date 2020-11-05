@@ -23,13 +23,23 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type Gbase8sConfig struct {
+	Replicas int `json:"replicas,omitempty"`
+}
+
+type ConnectManagerConfig struct {
+	Replicas int `json:"replicas,omitempty"`
+}
+
 // Gbase8sClusterSpec defines the desired state of Gbase8sCluster
 type Gbase8sClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of Gbase8sCluster. Edit Gbase8sCluster_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Foo string `json:"foo,omitempty"`
+	Gbase8sCfg Gbase8sConfig        `json:"gbase8s,omitempty"`
+	CmCfg      ConnectManagerConfig `json:"connectManager,omitempty"`
 }
 
 // Gbase8sClusterStatus defines the observed state of Gbase8sCluster

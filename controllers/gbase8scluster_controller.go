@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,10 +39,16 @@ type Gbase8sClusterReconciler struct {
 // +kubebuilder:rbac:groups=gbase8s.gbase.cn,resources=gbase8sclusters/status,verbs=get;update;patch
 
 func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	_ = r.Log.WithValues("gbase8scluster", req.NamespacedName)
+	ctx := context.Background()
+	log := r.Log.WithValues("gbase8scluster", req.NamespacedName)
 
 	// your logic here
+	var gbase gbase8sv1.Gbase8sCluster
+	if err := r.Get(ctx, req.NamespacedName, &gbase); err != nil {
+		log.Error(err, "====unable to get gbase8s cluster====")
+	} else {
+		fmt.Println("===Get gbase8s cluster spec info success, ", gbase.Spec.Gbase8sCfg.Replicas, gbase.Spec.CmCfg.Replicas)
+	}
 
 	return ctrl.Result{}, nil
 }

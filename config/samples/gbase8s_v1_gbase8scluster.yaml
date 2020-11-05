@@ -4,4 +4,8 @@ metadata:
   name: gbase8scluster-sample
 spec:
   # Add fields here
-  foo: bar
+  # foo: bar
+  gbase8s:
+    replicas: 3
+  connectManager:
+    replicas: 1
