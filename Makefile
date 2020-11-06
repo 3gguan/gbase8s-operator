@@ -39,7 +39,6 @@ deploy: manifests
 	kustomize build config/default | kubectl apply -f -
 
 clean:
-	kustomize build config/crd | kubectl delete -f -
 	cd config/manager && kustomize edit set image controller=${IMG}
 	kustomize build config/default | kubectl delete -f -
 
