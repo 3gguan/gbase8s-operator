@@ -25,8 +25,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	corev1 "k8s.io/api/core/v1"
-
 	gbase8sv1 "Gbase8sCluster/api/v1"
 )
 
@@ -52,13 +50,13 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		fmt.Println("===Get gbase8s cluster spec info success, ", gbase8sCluster.Spec.Gbase8sCfg.Replicas, gbase8sCluster.Spec.CmCfg.Replicas)
 	}
 
-	var pods corev1.Pod
-	req.NamespacedName.Name = "gbase8s-cluster-0"
-	if err := r.Get(ctx, req.NamespacedName, &pods); err != nil {
-		log.Error(err, "====unable to get gbase8s cluster====")
-	} else {
-		fmt.Println("===Get gbase8s cluster spec info success, ", gbase8sCluster.Spec.Gbase8sCfg.Replicas, gbase8sCluster.Spec.CmCfg.Replicas)
-	}
+	//var pods corev1.Pod
+	//req.NamespacedName.Name = "gbase8s-cluster-0"
+	//if err := r.Get(ctx, req.NamespacedName, &pods); err != nil {
+	//	log.Error(err, "====unable to get gbase8s cluster====")
+	//} else {
+	//	fmt.Println("===Get gbase8s cluster spec info success, ", gbase8sCluster.Spec.Gbase8sCfg.Replicas, gbase8sCluster.Spec.CmCfg.Replicas)
+	//}
 
 	gbase8sCluster.Status.Status = "Running"
 	if err := r.Status().Update(ctx, &gbase8sCluster); err != nil {
