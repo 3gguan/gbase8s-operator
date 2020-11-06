@@ -50,6 +50,7 @@ type Gbase8sClusterStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // Gbase8sCluster is the Schema for the gbase8sclusters API
 type Gbase8sCluster struct {
