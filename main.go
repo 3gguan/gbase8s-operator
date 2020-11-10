@@ -18,16 +18,16 @@ package main
 
 import (
 	"flag"
-	"os"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	gbase8sv1 "Gbase8sCluster/api/v1"
 	"Gbase8sCluster/controllers"
+	"Gbase8sCluster/util"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -66,10 +66,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	setupLog.Info(mgr.GetConfig().Host, mgr.GetConfig().TLSClientConfig.ServerName, mgr.GetConfig().TLSClientConfig.CAFile)
+
+	execInPod, err := util.NewExecClient()
+	if err != nil {
+		setupLog.Error(err, "unable to get exec client")
+	}
+
 	if err = (&controllers.Gbase8sClusterReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Gbase8sCluster"),
-		Scheme: mgr.GetScheme(),
+		Client:    mgr.GetClient(),
+		Log:       ctrl.Log.WithName("controllers").WithName("Gbase8sCluster"),
+		Scheme:    mgr.GetScheme(),
+		ExecInPod: execInPod,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Gbase8sCluster")
 		os.Exit(1)
