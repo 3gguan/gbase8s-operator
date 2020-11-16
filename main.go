@@ -78,6 +78,7 @@ func main() {
 		Log:       ctrl.Log.WithName("controllers").WithName("Gbase8sCluster"),
 		Scheme:    mgr.GetScheme(),
 		ExecInPod: execInPod,
+		Event:     mgr.GetEventRecorderFor("gbase8s-operator-controller-manager"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Gbase8sCluster")
 		os.Exit(1)

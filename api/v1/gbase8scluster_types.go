@@ -23,12 +23,28 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type Gbase8sConfigMap struct {
+	Name        string `json:"name,omitempty"`
+	OnconfigKey string `json:"onconfigKey,omitempty"`
+	AllowedKey  string `json:"allowedKey,omitempty"`
+}
+
+type Gbase8sNode struct {
+	Name        string `json:"name,omitempty"`
+	StoragePath string `json:"storagePath,omitempty"`
+	LogPath     string `json:"logPath,omitempty"`
+}
+
 type Gbase8sConfig struct {
-	Replicas int `json:"replicas,omitempty"`
+	Replicas   int32            `json:"replicas,omitempty"`
+	Image      string           `json:"image,omitempty"`
+	SecretName string           `json:"secretName,omitempty"`
+	ConfigMap  Gbase8sConfigMap `json:"configMap,omitempty"`
+	Nodes      []Gbase8sNode    `json:"nodes,omitempty"`
 }
 
 type ConnectManagerConfig struct {
-	Replicas int `json:"replicas,omitempty"`
+	Replicas int32 `json:"replicas,omitempty"`
 }
 
 // Gbase8sClusterSpec defines the desired state of Gbase8sCluster

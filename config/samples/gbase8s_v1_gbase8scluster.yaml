@@ -7,5 +7,21 @@ spec:
   # foo: bar
   gbase8s:
     replicas: 3
+    image: gbase8s:8.8
+    secretName: gbase8s-secret
+    configMap:
+      name: gbase8s-conf
+      onconfigKey: onconfig.ol_gbasedbt_1
+      allowedKey: allowed.surrogates
+    nodes:
+      - name: master
+        storagePath: /local/storage1
+        logPath: /local/log1
+      - name: master
+        storagePath: /local/storage2
+        logPath: /local/log2
+      - name: node1
+        storagePath: /local/storage1
+        logPath: /local/log1
   connectManager:
-    replicas: 1
+    replicas: 2
