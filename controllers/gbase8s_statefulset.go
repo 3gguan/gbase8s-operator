@@ -96,6 +96,17 @@ func NewGbase8sStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulse
 						StorageClassName: &storageClassName,
 					},
 				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: GBASE8S_PVC_LOG_TEMPLATE_NAME,
+					},
+					Spec: corev1.PersistentVolumeClaimSpec{
+						AccessModes: []corev1.PersistentVolumeAccessMode{
+							corev1.ReadWriteOnce,
+						},
+						StorageClassName: &storageClassName,
+					},
+				},
 			}
 	}
 
