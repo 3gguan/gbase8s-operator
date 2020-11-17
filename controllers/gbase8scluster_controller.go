@@ -76,6 +76,36 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		gbase8sExpectReplicas = gbase8sCluster.Spec.Gbase8sCfg.Replicas
 	}
 
+	//创建pv,pvc
+	nodes := gbase8sCluster.Spec.Gbase8sCfg.Nodes
+	if nodes != nil && len(nodes) != 0 {
+		if pv, err := NewGbase8sPV(&gbase8sCluster); err != nil {
+			log.Errorf("Create gbase8s pvs failed, err: %s", err.Error())
+			return ctrl.Result{}, err
+		} else {
+			if len(pv.PVs) != 0 {
+				for _, v := range pv.PVs {
+					if err := r.Create(ctx, v); err != nil {
+						log.Errorf("Create gbase8s pv %s failed, err: %s", v.Name, err.Error())
+						return ctrl.Result{}, nil
+					} else {
+						log.Infof("Create gbase8s pv %s success", v.Name)
+					}
+				}
+			}
+			if len(pv.PVCs) != 0 {
+				for _, v := range pv.PVCs {
+					if err := r.Create(ctx, v); err != nil {
+						log.Errorf("Create gbase8s pvc %s failed, err: %s", v.Name, err.Error())
+						return ctrl.Result{}, nil
+					} else {
+						log.Infof("Create gbase8s pvc %s success", v.Name)
+					}
+				}
+			}
+		}
+	}
+
 	//获取gbase8s statefulset资源
 	var gbase8sReplicas int32
 	var statefulset appsv1.StatefulSet

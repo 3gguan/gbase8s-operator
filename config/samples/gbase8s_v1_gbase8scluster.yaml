@@ -15,13 +15,31 @@ spec:
       allowedKey: allowed.surrogates
     nodes:
       - name: master
-        storagePath: /local/storage1
-        logPath: /local/log1
+        storage:
+          path: /local/storage1
+          size: 2Gi
+          volumeMode: Filesystem
+        log:
+          path: /local/log1
+          size: 2Gi
+          volumeMode: Filesystem
       - name: master
-        storagePath: /local/storage2
-        logPath: /local/log2
+        storage:
+          path: /local/storage2
+          size: 2Gi
+          volumeMode: Filesystem
+        log:
+          path: /local/log2
+          size: 2Gi
+          volumeMode: Filesystem
       - name: node1
-        storagePath: /local/storage1
-        logPath: /local/log1
+        storage:
+          path: /local/storage3
+          size: 2Gi
+          volumeMode: Filesystem
+        log:
+          path: /local/log3
+          size: 2Gi
+          volumeMode: Filesystem
   connectManager:
     replicas: 2

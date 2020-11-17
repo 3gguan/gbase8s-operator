@@ -48,7 +48,7 @@ func NewGbase8sStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulse
 					Containers: []corev1.Container{
 						{
 							Name:  "gbase8s",
-							Image: "gbase8s:8.8",
+							Image: cluster.Spec.Gbase8sCfg.Image,
 							SecurityContext: &corev1.SecurityContext{
 								Capabilities: &corev1.Capabilities{
 									Add: []corev1.Capability{
@@ -67,6 +67,36 @@ func NewGbase8sStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulse
 				},
 			},
 		},
+	}
+
+	if cluster.Spec.Gbase8sCfg.Nodes != nil && len(cluster.Spec.Gbase8sCfg.Nodes) != 0 {
+		createStatefulset.Spec.Template.Spec.Containers[0].VolumeMounts =
+			[]corev1.VolumeMount{
+				{
+					Name:      GBASE8S_PVC_STORAGE_TEMPLATE_NAME,
+					MountPath: "/opt/gbase8s/storage",
+				},
+				{
+					Name:      GBASE8S_PVC_LOG_TEMPLATE_NAME,
+					MountPath: "/opt/gbase8s/logs",
+				},
+			}
+
+		storageClassName := GBASE8S_STORAGE_CLASS_NAME
+		createStatefulset.Spec.VolumeClaimTemplates =
+			[]corev1.PersistentVolumeClaim{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: GBASE8S_PVC_STORAGE_TEMPLATE_NAME,
+					},
+					Spec: corev1.PersistentVolumeClaimSpec{
+						AccessModes: []corev1.PersistentVolumeAccessMode{
+							corev1.ReadWriteOnce,
+						},
+						StorageClassName: &storageClassName,
+					},
+				},
+			}
 	}
 
 	gsfs.sfs = &createStatefulset

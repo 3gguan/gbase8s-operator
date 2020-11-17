@@ -29,10 +29,16 @@ type Gbase8sConfigMap struct {
 	AllowedKey  string `json:"allowedKey,omitempty"`
 }
 
+type Gbase8sStorage struct {
+	Path       string `json:"path,omitempty"`
+	Size       string `json:"size,omitempty"`
+	VolumeMode string `json:"volumeMode,omitempty"`
+}
+
 type Gbase8sNode struct {
-	Name        string `json:"name,omitempty"`
-	StoragePath string `json:"storagePath,omitempty"`
-	LogPath     string `json:"logPath,omitempty"`
+	Name    string          `json:"name,omitempty"`
+	Storage *Gbase8sStorage `json:"storage,omitempty"`
+	Log     *Gbase8sStorage `json:"log,omitempty"`
 }
 
 type Gbase8sConfig struct {
