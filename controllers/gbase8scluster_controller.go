@@ -85,21 +85,49 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		} else {
 			if len(pv.PVs) != 0 {
 				for _, v := range pv.PVs {
-					if err := r.Create(ctx, v); err != nil {
-						log.Errorf("Create gbase8s pv %s failed, err: %s", v.Name, err.Error())
-						return ctrl.Result{}, nil
+					reqTemp := ctrl.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      v.Name,
+							Namespace: v.Namespace,
+						},
+					}
+					pvTemp := corev1.PersistentVolume{}
+					if err := r.Get(ctx, reqTemp.NamespacedName, &pvTemp); err != nil {
+						log.Infof("Unable to get gbase8s pv %s, error: %s", v.Name, err.Error())
+						if err := r.Update(ctx, v); err != nil {
+							log.Errorf("Update gbase8s pv %s failed, error: %s", v.Name, err.Error())
+						}
 					} else {
-						log.Infof("Create gbase8s pv %s success", v.Name)
+						if err := r.Create(ctx, v); err != nil {
+							log.Errorf("Create gbase8s pv %s failed, err: %s", v.Name, err.Error())
+							return ctrl.Result{}, nil
+						} else {
+							log.Infof("Create gbase8s pv %s success", v.Name)
+						}
 					}
 				}
 			}
 			if len(pv.PVCs) != 0 {
 				for _, v := range pv.PVCs {
-					if err := r.Create(ctx, v); err != nil {
-						log.Errorf("Create gbase8s pvc %s failed, err: %s", v.Name, err.Error())
-						return ctrl.Result{}, nil
+					reqTemp := ctrl.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      v.Name,
+							Namespace: v.Namespace,
+						},
+					}
+					pvcTemp := corev1.PersistentVolumeClaim{}
+					if err := r.Get(ctx, reqTemp.NamespacedName, &pvcTemp); err != nil {
+						log.Infof("Unable to get gbase8s pvc %s, error: %s", v.Name, err.Error())
+						if err := r.Update(ctx, v); err != nil {
+							log.Errorf("Update gbase8s pvc %s failed, error: %s", v.Name, err.Error())
+						}
 					} else {
-						log.Infof("Create gbase8s pvc %s success", v.Name)
+						if err := r.Create(ctx, v); err != nil {
+							log.Errorf("Create gbase8s pvc %s failed, err: %s", v.Name, err.Error())
+							return ctrl.Result{}, nil
+						} else {
+							log.Infof("Create gbase8s pvc %s success", v.Name)
+						}
 					}
 				}
 			}
