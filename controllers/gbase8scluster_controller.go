@@ -135,7 +135,7 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		log.Infof("Unable to get gbase8s service resource, error: %s", err.Error())
 
 		//创建service
-		gsvc := NewGbase8sService()
+		gsvc := NewGbase8sService(&gbase8sCluster)
 		if err := r.Create(ctx, gsvc.svc); err != nil {
 			log.Errorf("Create gbase8s service failed, err: %s", err.Error())
 			return ctrl.Result{}, err
