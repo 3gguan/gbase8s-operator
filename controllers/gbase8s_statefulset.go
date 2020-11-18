@@ -27,7 +27,7 @@ func NewGbase8sStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulse
 					Controller: &trueVar,
 				},
 			},
-			Namespace: "default",
+			Namespace: cluster.Namespace,
 		},
 
 		Spec: appsv1.StatefulSetSpec{
@@ -35,19 +35,19 @@ func NewGbase8sStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulse
 			Replicas:    &cluster.Spec.Gbase8sCfg.Replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app": "gbase8s-cluster",
+					GBASE8S_STATEFULSET_LABEL_KEY: GBASE8S_STATEFULSET_LABEL_VALUE,
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": "gbase8s-cluster",
+						GBASE8S_STATEFULSET_LABEL_KEY: GBASE8S_STATEFULSET_LABEL_VALUE,
 					},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "gbase8s",
+							Name:  GBASE8S_CLUSTER_CONTAINER_NAME,
 							Image: cluster.Spec.Gbase8sCfg.Image,
 							SecurityContext: &corev1.SecurityContext{
 								Capabilities: &corev1.Capabilities{
@@ -74,11 +74,11 @@ func NewGbase8sStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulse
 			[]corev1.VolumeMount{
 				{
 					Name:      GBASE8S_PVC_STORAGE_TEMPLATE_NAME,
-					MountPath: "/opt/gbase8s/storage",
+					MountPath: GBASE8S_MOUNT_STORAGE_PATH,
 				},
 				{
 					Name:      GBASE8S_PVC_LOG_TEMPLATE_NAME,
-					MountPath: "/opt/gbase8s/logs",
+					MountPath: GBASE8S_MOUNT_LOG_PATH,
 				},
 			}
 

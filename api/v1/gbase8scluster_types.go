@@ -60,6 +60,7 @@ type Gbase8sClusterSpec struct {
 
 	// Foo is an example field of Gbase8sCluster. Edit Gbase8sCluster_types.go to remove/update
 	// Foo string `json:"foo,omitempty"`
+	Namespace  string               `json:"namespace,omitempty"`
 	Gbase8sCfg Gbase8sConfig        `json:"gbase8s,omitempty"`
 	CmCfg      ConnectManagerConfig `json:"connectManager,omitempty"`
 }

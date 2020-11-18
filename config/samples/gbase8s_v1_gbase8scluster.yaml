@@ -5,6 +5,7 @@ metadata:
 spec:
   # Add fields here
   # foo: bar
+  namespace: default
   gbase8s:
     replicas: 3
     image: gbase8s:8.8

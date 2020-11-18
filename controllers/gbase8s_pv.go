@@ -14,7 +14,7 @@ type gbase8sPV struct {
 	PVCs []*corev1.PersistentVolumeClaim
 }
 
-func newPV(volInfo *v1.Gbase8sStorage, nodeName, pvName string) (*corev1.PersistentVolume, error) {
+func newPV(volInfo *v1.Gbase8sStorage, nodeName, pvName, namespace string) (*corev1.PersistentVolume, error) {
 	quantity, err := resource.ParseQuantity(volInfo.Size)
 	if err != nil {
 		return nil, err
@@ -23,7 +23,7 @@ func newPV(volInfo *v1.Gbase8sStorage, nodeName, pvName string) (*corev1.Persist
 	pv := corev1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvName,
-			Namespace: "default",
+			Namespace: namespace,
 			Labels: map[string]string{
 				GBASE8S_PV_LABEL_KEY: pvName,
 			},
@@ -66,7 +66,7 @@ func newPV(volInfo *v1.Gbase8sStorage, nodeName, pvName string) (*corev1.Persist
 	return &pv, nil
 }
 
-func newPVC(pvcName, pvName, size string) (*corev1.PersistentVolumeClaim, error) {
+func newPVC(pvcName, pvName, size, namespace string) (*corev1.PersistentVolumeClaim, error) {
 	quantity, err := resource.ParseQuantity(size)
 	if err != nil {
 		return nil, err
@@ -75,7 +75,7 @@ func newPVC(pvcName, pvName, size string) (*corev1.PersistentVolumeClaim, error)
 	pvc := corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
-			Namespace: "default",
+			Namespace: namespace,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{
@@ -98,20 +98,50 @@ func newPVC(pvcName, pvName, size string) (*corev1.PersistentVolumeClaim, error)
 	return &pvc, nil
 }
 
+func setOwnerReference(pv *gbase8sPV, cluster *gbase8sv1.Gbase8sCluster) {
+	trueVar := true
+	if pv.PVs != nil && len(pv.PVs) != 0 {
+		for _, v := range pv.PVs {
+			v.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+				{
+					APIVersion: cluster.APIVersion,
+					Kind:       cluster.Kind,
+					Name:       cluster.Name,
+					UID:        cluster.UID,
+					Controller: &trueVar,
+				},
+			}
+		}
+	}
+	if pv.PVCs != nil && len(pv.PVCs) != 0 {
+		for _, v := range pv.PVs {
+			v.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+				{
+					APIVersion: cluster.APIVersion,
+					Kind:       cluster.Kind,
+					Name:       cluster.Name,
+					UID:        cluster.UID,
+					Controller: &trueVar,
+				},
+			}
+		}
+	}
+}
+
 func NewGbase8sPV(cluster *gbase8sv1.Gbase8sCluster) (*gbase8sPV, error) {
 	gbase8sPV := gbase8sPV{}
 	for i, v := range cluster.Spec.Gbase8sCfg.Nodes {
 		//创建storage pv pvc
 		if v.Storage != nil {
 			pvName := fmt.Sprintf("%s-pv-storage-%d", GBASE8S_SERVICE_DEFAULT_NAME, i)
-			if pv, err := newPV(v.Storage, v.Name, pvName); err != nil {
+			if pv, err := newPV(v.Storage, v.Name, pvName, cluster.Namespace); err != nil {
 				return nil, err
 			} else {
 				gbase8sPV.PVs = append(gbase8sPV.PVs, pv)
 			}
 
 			pvcName := fmt.Sprintf("%s-%s-%d", GBASE8S_PVC_STORAGE_TEMPLATE_NAME, GBASE8S_STATEFULSET_DEFAULT_NAME, i)
-			if pvc, err := newPVC(pvcName, pvName, v.Storage.Size); err != nil {
+			if pvc, err := newPVC(pvcName, pvName, v.Storage.Size, cluster.Namespace); err != nil {
 				return nil, err
 			} else {
 				gbase8sPV.PVCs = append(gbase8sPV.PVCs, pvc)
@@ -121,20 +151,22 @@ func NewGbase8sPV(cluster *gbase8sv1.Gbase8sCluster) (*gbase8sPV, error) {
 		//创建log pv pvc
 		if v.Log != nil {
 			pvName := fmt.Sprintf("%s-pv-log-%d", GBASE8S_SERVICE_DEFAULT_NAME, i)
-			if pv, err := newPV(v.Log, v.Name, pvName); err != nil {
+			if pv, err := newPV(v.Log, v.Name, pvName, cluster.Namespace); err != nil {
 				return nil, err
 			} else {
 				gbase8sPV.PVs = append(gbase8sPV.PVs, pv)
 			}
 
 			pvcName := fmt.Sprintf("%s-%s-%d", GBASE8S_PVC_LOG_TEMPLATE_NAME, GBASE8S_STATEFULSET_DEFAULT_NAME, i)
-			if pvc, err := newPVC(pvcName, pvName, v.Storage.Size); err != nil {
+			if pvc, err := newPVC(pvcName, pvName, v.Storage.Size, cluster.Namespace); err != nil {
 				return nil, err
 			} else {
 				gbase8sPV.PVCs = append(gbase8sPV.PVCs, pvc)
 			}
 		}
 	}
+
+	setOwnerReference(&gbase8sPV, cluster)
 
 	return &gbase8sPV, nil
 }
