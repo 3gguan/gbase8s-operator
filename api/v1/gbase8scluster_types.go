@@ -41,6 +41,11 @@ type Gbase8sNode struct {
 	Log     *Gbase8sStorage `json:"log,omitempty"`
 }
 
+type CmNode struct {
+	Name string          `json:"name,omitempty"`
+	Log  *Gbase8sStorage `json:"log,omitempty"`
+}
+
 type Gbase8sConfig struct {
 	Replicas   int32            `json:"replicas,omitempty"`
 	Image      string           `json:"image,omitempty"`
@@ -49,12 +54,12 @@ type Gbase8sConfig struct {
 	Nodes      []Gbase8sNode    `json:"nodes,omitempty"`
 }
 
-type ConnectManagerConfig struct {
+type CmConfig struct {
 	Replicas   int32            `json:"replicas,omitempty"`
 	Image      string           `json:"image,omitempty"`
 	SecretName string           `json:"secretName,omitempty"`
 	ConfigMap  Gbase8sConfigMap `json:"configMap,omitempty"`
-	Nodes      []Gbase8sNode    `json:"nodes,omitempty"`
+	Nodes      []CmNode         `json:"nodes,omitempty"`
 }
 
 // Gbase8sClusterSpec defines the desired state of Gbase8sCluster
@@ -65,8 +70,8 @@ type Gbase8sClusterSpec struct {
 	// Foo is an example field of Gbase8sCluster. Edit Gbase8sCluster_types.go to remove/update
 	// Foo string `json:"foo,omitempty"`
 	//Namespace  string               `json:"namespace,omitempty"`
-	Gbase8sCfg Gbase8sConfig        `json:"gbase8s,omitempty"`
-	CmCfg      ConnectManagerConfig `json:"connectManager,omitempty"`
+	Gbase8sCfg Gbase8sConfig `json:"gbase8s,omitempty"`
+	CmCfg      CmConfig      `json:"connectManager,omitempty"`
 }
 
 // Gbase8sClusterStatus defines the observed state of Gbase8sCluster

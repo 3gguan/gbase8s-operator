@@ -88,7 +88,7 @@ func NewCmStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulset {
 				},
 			}
 
-		storageClassName := CM_STORAGE_CLASS_NAME
+		storageClassName := GBASE8S_STORAGE_CLASS_NAME
 		createStatefulset.Spec.VolumeClaimTemplates =
 			[]corev1.PersistentVolumeClaim{
 				{

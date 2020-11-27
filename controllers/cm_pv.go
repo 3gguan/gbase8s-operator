@@ -15,16 +15,16 @@ func NewCmPV(cluster *gbase8sv1.Gbase8sCluster) (*CmPV, error) {
 	cmPV := CmPV{}
 	for i, v := range cluster.Spec.CmCfg.Nodes {
 		//创建log pv pvc
-		if v.Storage != nil {
+		if v.Log != nil {
 			pvName := fmt.Sprintf("%s%s-%d", CM_PV_LOG_PREFIX, cluster.Name, i)
-			if pv, err := newPV(v.Storage, v.Name, pvName); err != nil {
+			if pv, err := newPV(v.Log, v.Name, pvName); err != nil {
 				return nil, err
 			} else {
 				cmPV.PVs = append(cmPV.PVs, pv)
 			}
 
 			pvcName := fmt.Sprintf("%s-%s%s-%d", GBASE8S_PVC_LOG_TEMPLATE_NAME, CM_STATEFULSET_NAME_PREFIX, cluster.Name, i)
-			if pvc, err := newPVC(pvcName, pvName, v.Storage.Size, cluster.Namespace); err != nil {
+			if pvc, err := newPVC(pvcName, pvName, v.Log.Size, cluster.Namespace); err != nil {
 				return nil, err
 			} else {
 				cmPV.PVCs = append(cmPV.PVCs, pvc)

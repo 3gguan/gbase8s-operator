@@ -11,9 +11,9 @@ const (
 
 	//gbase8s cm公用
 	GBASE8S_PV_LABEL_KEY              = "gbase8sPVName"
-	GBASE8S_STORAGE_CLASS_NAME        = "gbase8s-local-volume"
-	GBASE8S_PVC_STORAGE_TEMPLATE_NAME = "gbase8s-local-storage-volume"
-	GBASE8S_PVC_LOG_TEMPLATE_NAME     = "gbase8s-local-log-volume"
+	GBASE8S_STORAGE_CLASS_NAME        = "gbase8s-cluster-local-volume"
+	GBASE8S_PVC_STORAGE_TEMPLATE_NAME = "gbase8s-storage"
+	GBASE8S_PVC_LOG_TEMPLATE_NAME     = "gbase8s-log"
 
 	//gbase8s相关
 	GBASE8S_STATEFULSET_NAME_PREFIX = "gbase8s-cluster-"
@@ -27,8 +27,8 @@ const (
 
 	GBASE8S_CONTAINER_NAME = "gbase8s"
 
-	GBASE8S_PV_STORAGE_PREFIX = "gbase8s-pv-storage-"
-	GBASE8S_PV_LOG_PREFIX     = "gbase8s-pv-log-"
+	GBASE8S_PV_STORAGE_PREFIX = "gbase8s-storage-"
+	GBASE8S_PV_LOG_PREFIX     = "gbase8s-log-"
 
 	GBASE8S_MOUNT_STORAGE_PATH = "/opt/gbase8s/storage"
 	GBASE8S_MOUNT_LOG_PATH     = "/opt/gbase8s/logs"
@@ -51,7 +51,7 @@ const (
 	CM_SLA_REDIRECT_PORT = 10000
 	CM_SLA_PROXY_PORT    = 10001
 
-	CM_MOUNT_LOG_PATH     = "/opt/gbase8s/logs"
-	CM_STORAGE_CLASS_NAME = "cm-local-volume"
-	CM_PV_LOG_PREFIX      = "cm-pv-log-"
+	CM_MOUNT_LOG_PATH = "/opt/gbase8s/logs"
+	//CM_STORAGE_CLASS_NAME = "cm-local-volume"
+	CM_PV_LOG_PREFIX = "cm-log-"
 )
