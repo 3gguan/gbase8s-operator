@@ -7,17 +7,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type gbase8sStatefulset struct {
+type CmStatefulset struct {
 	sfs *appsv1.StatefulSet
 }
 
-func NewGbase8sStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulset {
+func NewCmStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulset {
 	gsfs := gbase8sStatefulset{}
 
 	trueVar := true
 	createStatefulset := appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: GBASE8S_STATEFULSET_NAME_PREFIX + cluster.Name,
+			Name: CM_STATEFULSET_NAME_PREFIX + cluster.Name,
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: cluster.APIVersion,
@@ -31,24 +31,24 @@ func NewGbase8sStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulse
 		},
 
 		Spec: appsv1.StatefulSetSpec{
-			ServiceName: GBASE8S_SERVICE_NAME_PREFIX + cluster.Name,
-			Replicas:    &cluster.Spec.Gbase8sCfg.Replicas,
+			ServiceName: CM_SERVICE_NAME_PREFIX + cluster.Name,
+			Replicas:    &cluster.Spec.CmCfg.Replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					GBASE8S_POD_LABEL_KEY: GBASE8S_POD_LABEL_VALUE_PREFIX + cluster.Name,
+					CM_POD_LABEL_KEY: CM_POD_LABEL_VALUE_PREFIX + cluster.Name,
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						GBASE8S_POD_LABEL_KEY: GBASE8S_POD_LABEL_VALUE_PREFIX + cluster.Name,
+						CM_POD_LABEL_KEY: CM_POD_LABEL_VALUE_PREFIX + cluster.Name,
 					},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  GBASE8S_CONTAINER_NAME,
-							Image: cluster.Spec.Gbase8sCfg.Image,
+							Name:  CM_CONTAINER_NAME,
+							Image: cluster.Spec.CmCfg.Image,
 							SecurityContext: &corev1.SecurityContext{
 								Capabilities: &corev1.Capabilities{
 									Add: []corev1.Capability{
@@ -58,13 +58,17 @@ func NewGbase8sStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulse
 							},
 							Ports: []corev1.ContainerPort{
 								{
-									ContainerPort: 9088,
-									Name:          "onsoctcp",
+									ContainerPort: CM_SLA_REDIRECT_PORT,
+									Name:          "redirect",
+								},
+								{
+									ContainerPort: CM_SLA_PROXY_PORT,
+									Name:          "proxy",
 								},
 							},
 							Env: []corev1.EnvVar{
 								{
-									Name:  "AUTO_SERVER_NAME",
+									Name:  "START_MANUAL",
 									Value: "1",
 								},
 							},
@@ -75,33 +79,18 @@ func NewGbase8sStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulse
 		},
 	}
 
-	if cluster.Spec.Gbase8sCfg.Nodes != nil && len(cluster.Spec.Gbase8sCfg.Nodes) != 0 {
+	if cluster.Spec.CmCfg.Nodes != nil && len(cluster.Spec.CmCfg.Nodes) != 0 {
 		createStatefulset.Spec.Template.Spec.Containers[0].VolumeMounts =
 			[]corev1.VolumeMount{
 				{
-					Name:      GBASE8S_PVC_STORAGE_TEMPLATE_NAME,
-					MountPath: GBASE8S_MOUNT_STORAGE_PATH,
-				},
-				{
 					Name:      GBASE8S_PVC_LOG_TEMPLATE_NAME,
-					MountPath: GBASE8S_MOUNT_LOG_PATH,
+					MountPath: CM_MOUNT_LOG_PATH,
 				},
 			}
 
-		storageClassName := GBASE8S_STORAGE_CLASS_NAME
+		storageClassName := CM_STORAGE_CLASS_NAME
 		createStatefulset.Spec.VolumeClaimTemplates =
 			[]corev1.PersistentVolumeClaim{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: GBASE8S_PVC_STORAGE_TEMPLATE_NAME,
-					},
-					Spec: corev1.PersistentVolumeClaimSpec{
-						AccessModes: []corev1.PersistentVolumeAccessMode{
-							corev1.ReadWriteOnce,
-						},
-						StorageClassName: &storageClassName,
-					},
-				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: GBASE8S_PVC_LOG_TEMPLATE_NAME,

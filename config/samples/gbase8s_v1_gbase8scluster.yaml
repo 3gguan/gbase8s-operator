@@ -5,7 +5,7 @@ metadata:
 spec:
   # Add fields here
   # foo: bar
-  namespace: default
+  #namespace: default
   gbase8s:
     replicas: 3
     image: gbase8s:8.8
@@ -44,3 +44,24 @@ spec:
           volumeMode: Filesystem
   connectManager:
     replicas: 2
+    image: cm:8.8
+    secretName: gbase8s-secret
+    configMap:
+      name: cm-conf
+      configKey: onconfig.ol_gbasedbt_1
+    nodes:
+      - name: master
+        log:
+          path: /local/cmlog1
+          size: 2Gi
+          volumeMode: Filesystem
+      - name: master
+        log:
+          path: /local/cmlog2
+          size: 2Gi
+          volumeMode: Filesystem
+      - name: node1
+        log:
+          path: /local/cmlog3
+          size: 2Gi
+          volumeMode: Filesystem

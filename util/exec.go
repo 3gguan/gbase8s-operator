@@ -8,6 +8,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"os"
 	"path/filepath"
+	"time"
 
 	// "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -95,6 +96,7 @@ func (r *ExecInPod) Exec(command []string, containerName, podName, namespace str
 		Resource("pods").
 		Name(podName).
 		Namespace(namespace).
+		Timeout(time.Minute * 10).
 		SubResource("exec")
 	scheme := runtime.NewScheme()
 	if err := corev1.AddToScheme(scheme); err != nil {

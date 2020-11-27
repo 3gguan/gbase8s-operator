@@ -19,18 +19,17 @@ package controllers
 import (
 	gbase8sv1 "Gbase8sCluster/api/v1"
 	"context"
-	"github.com/go-logr/logr"
 	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	_ "k8s.io/client-go/tools/remotecommand"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"Gbase8sCluster/util"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 var log = logrus.New()
@@ -38,10 +37,79 @@ var log = logrus.New()
 // Gbase8sClusterReconciler reconciles a Gbase8sCluster object
 type Gbase8sClusterReconciler struct {
 	client.Client
-	Log       logr.Logger
-	Scheme    *runtime.Scheme
-	ExecInPod *util.ExecInPod
-	Event     record.EventRecorder
+	//Log       logr.Logger
+	Scheme *runtime.Scheme
+	Event  record.EventRecorder
+	*Gbase8sClusterBuilder
+}
+
+func (r *Gbase8sClusterReconciler) createPVs(pvs []*corev1.PersistentVolume, ctx context.Context) error {
+	if len(pvs) != 0 {
+		for _, v := range pvs {
+			reqTemp := ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Name: v.Name,
+				},
+			}
+			pvTemp := corev1.PersistentVolume{}
+			if err := r.Get(ctx, reqTemp.NamespacedName, &pvTemp); err != nil {
+				if errors.IsNotFound(err) {
+					if err := r.Create(ctx, v); err != nil {
+						log.Errorf("Create gbase8s pv %s failed, err: %s", v.Name, err.Error())
+						return err
+					} else {
+						log.Infof("Create gbase8s pv %s success", v.Name)
+					}
+				} else {
+					log.Errorf("Get gbase8s pv %s failed, error: %s", v.Name, err.Error())
+					return err
+				}
+			} else {
+				log.Infof("Get gbase8s pv %s success", v.Name)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *Gbase8sClusterReconciler) createPVCs(pvcs []*corev1.PersistentVolumeClaim, ctx context.Context) error {
+	if len(pvcs) != 0 {
+		for _, v := range pvcs {
+			reqTemp := ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      v.Name,
+					Namespace: v.Namespace,
+				},
+			}
+			pvcTemp := corev1.PersistentVolumeClaim{}
+			if err := r.Get(ctx, reqTemp.NamespacedName, &pvcTemp); err != nil {
+				if errors.IsNotFound(err) {
+					if err := r.Create(ctx, v); err != nil {
+						log.Errorf("Create gbase8s pvc %s failed, err: %s", v.Name, err.Error())
+						return err
+					} else {
+						log.Infof("Create gbase8s pvc %s success", v.Name)
+					}
+				} else {
+					log.Error("Get gbase8s pvc %s failed, error: %s", v.Name, err.Error())
+					return err
+				}
+
+			} else {
+				log.Infof("Get gbase8s pvc %s success", v.Name)
+			}
+			//else {
+			//	if err := r.Update(ctx, v); err != nil {
+			//		log.Errorf("Update gbase8s pvc %s failed, error: %s", v.Name, err.Error())
+			//	} else {
+			//		log.Infof("Update gbase8s pvc %s success", v.Name)
+			//	}
+			//}
+		}
+	}
+
+	return nil
 }
 
 // +kubebuilder:rbac:groups=gbase8s.gbase.cn,resources=gbase8sclusters,verbs=get;list;watch;create;update;patch;delete
@@ -53,27 +121,23 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	log.Infof("------ %s %s ------", req.Name, req.Namespace)
 
-	//cmd := []string{"bash", "-c", "source env.sh && onstat -g rss"}
-	//
-	//retOut, retErr, err := r.ExecInPod.Exec(cmd, "gbase8s", "gbase8s-cluster-0", "default", nil)
-	//if err != nil {
-	//	log.Error(err, "failed to exec command")
-	//
-	//} else {
-	//	log.Info("retOut: " + retOut)
-	//	log.Info("retErr: " + retErr)
-	//}
-
 	// your logic here
 	//获取Gbase8sCluster资源
 	var gbase8sExpectReplicas int32
+	var cmExpectReplicas int32
 	var gbase8sCluster gbase8sv1.Gbase8sCluster
 	if err := r.Get(ctx, req.NamespacedName, &gbase8sCluster); err != nil {
 		log.Errorf("Unable to get gbase8s cluster resource, error: %s", err.Error())
+		if errors.IsNotFound(err) {
+			// Object not found, return.  Created objects are automatically garbage collected.
+			// For additional cleanup logic use finalizers.
+			return reconcile.Result{}, nil
+		}
 		return ctrl.Result{}, err
 	} else {
 		log.Infof("Get gbase8s cluster resource success, gbase8s replicas: %d, cm replicas: %d", gbase8sCluster.Spec.Gbase8sCfg.Replicas, gbase8sCluster.Spec.CmCfg.Replicas)
 		gbase8sExpectReplicas = gbase8sCluster.Spec.Gbase8sCfg.Replicas
+		cmExpectReplicas = gbase8sCluster.Spec.CmCfg.Replicas
 	}
 
 	//创建pv,pvc
@@ -83,95 +147,118 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			log.Errorf("Create gbase8s pvs failed, err: %s", err.Error())
 			return ctrl.Result{}, err
 		} else {
-			if len(pv.PVs) != 0 {
-				for _, v := range pv.PVs {
-					reqTemp := ctrl.Request{
-						NamespacedName: types.NamespacedName{
-							Name:      v.Name,
-							Namespace: v.Namespace,
-						},
-					}
-					pvTemp := corev1.PersistentVolume{}
-					if err := r.Get(ctx, reqTemp.NamespacedName, &pvTemp); err != nil {
-						log.Infof("Unable to get gbase8s pv %s, error: %s", v.Name, err.Error())
-						if err := r.Update(ctx, v); err != nil {
-							log.Errorf("Update gbase8s pv %s failed, error: %s", v.Name, err.Error())
-						}
-					} else {
-						if err := r.Create(ctx, v); err != nil {
-							log.Errorf("Create gbase8s pv %s failed, err: %s", v.Name, err.Error())
-							return ctrl.Result{}, nil
-						} else {
-							log.Infof("Create gbase8s pv %s success", v.Name)
-						}
-					}
-				}
+			err := r.createPVs(pv.PVs, ctx)
+			if err != nil {
+				return ctrl.Result{}, err
 			}
-			if len(pv.PVCs) != 0 {
-				for _, v := range pv.PVCs {
-					reqTemp := ctrl.Request{
-						NamespacedName: types.NamespacedName{
-							Name:      v.Name,
-							Namespace: v.Namespace,
-						},
-					}
-					pvcTemp := corev1.PersistentVolumeClaim{}
-					if err := r.Get(ctx, reqTemp.NamespacedName, &pvcTemp); err != nil {
-						log.Infof("Unable to get gbase8s pvc %s, error: %s", v.Name, err.Error())
-						if err := r.Update(ctx, v); err != nil {
-							log.Errorf("Update gbase8s pvc %s failed, error: %s", v.Name, err.Error())
-						}
-					} else {
-						if err := r.Create(ctx, v); err != nil {
-							log.Errorf("Create gbase8s pvc %s failed, err: %s", v.Name, err.Error())
-							return ctrl.Result{}, nil
-						} else {
-							log.Infof("Create gbase8s pvc %s success", v.Name)
-						}
-					}
-				}
+			err = r.createPVCs(pv.PVCs, ctx)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	}
+	cmNodes := gbase8sCluster.Spec.CmCfg.Nodes
+	if cmNodes != nil && len(cmNodes) != 0 {
+		if pv, err := NewCmPV(&gbase8sCluster); err != nil {
+			log.Errorf("Create cm pvs failed, err: %s", err.Error())
+			return ctrl.Result{}, err
+		} else {
+			err := r.createPVs(pv.PVs, ctx)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			err = r.createPVCs(pv.PVCs, ctx)
+			if err != nil {
+				return ctrl.Result{}, err
 			}
 		}
 	}
 
 	//获取gbase8s statefulset资源
 	var gbase8sReplicas int32
-	var statefulset appsv1.StatefulSet
-	reqTemp := ctrl.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      "gbase8s-cluster",
-			Namespace: req.Namespace,
-		},
+	gstatefulset := &appsv1.StatefulSet{}
+	gsfsReq := types.NamespacedName{
+		Name:      GBASE8S_STATEFULSET_NAME_PREFIX + req.Name,
+		Namespace: req.Namespace,
 	}
-	if err := r.Get(ctx, reqTemp.NamespacedName, &statefulset); err != nil {
+	if err := r.Get(ctx, gsfsReq, gstatefulset); err != nil {
 		log.Infof("Unable to get gbase8s statefulset resource, error: %s", err.Error())
-		gbase8sReplicas = 0
+		if errors.IsNotFound(err) {
+			gbase8sReplicas = 0
+		} else {
+			return ctrl.Result{}, err
+		}
 	} else {
-		log.Infof("Get gbase8s statefulset resource success, gbase8s replicas: %d", statefulset.Spec.Replicas)
-		gbase8sReplicas = *statefulset.Spec.Replicas
+		log.Infof("Get gbase8s statefulset resource success, gbase8s replicas: %d", gstatefulset.Spec.Replicas)
+		gbase8sReplicas = *gstatefulset.Spec.Replicas
 	}
 
-	//获取service资源
-	var service corev1.Service
-	reqSvc := ctrl.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      GBASE8S_SERVICE_DEFAULT_NAME,
-			Namespace: req.Namespace,
-		},
+	//获取cm statefulset资源
+	var cmReplicas int32
+	cmStatefulset := &appsv1.StatefulSet{}
+	cmSfsReq := types.NamespacedName{
+		Name:      CM_STATEFULSET_NAME_PREFIX + req.Name,
+		Namespace: req.Namespace,
 	}
-	if err := r.Get(ctx, reqSvc.NamespacedName, &service); err != nil {
+	if err := r.Get(ctx, cmSfsReq, cmStatefulset); err != nil {
+		log.Infof("Unable to get cm statefulset resource, error: %s", err.Error())
+		if errors.IsNotFound(err) {
+			cmReplicas = 0
+		} else {
+			return ctrl.Result{}, err
+		}
+	} else {
+		log.Infof("Get cm statefulset resource success, cm replicas: %d", cmStatefulset.Spec.Replicas)
+		cmReplicas = *cmStatefulset.Spec.Replicas
+	}
+
+	//获取并创建gbase8s service资源
+	var gservice corev1.Service
+	gsvcReq := types.NamespacedName{
+		Name:      GBASE8S_SERVICE_NAME_PREFIX + req.Name,
+		Namespace: req.Namespace,
+	}
+	if err := r.Get(ctx, gsvcReq, &gservice); err != nil {
 		log.Infof("Unable to get gbase8s service resource, error: %s", err.Error())
 
-		//创建service
-		gsvc := NewGbase8sService(&gbase8sCluster)
-		if err := r.Create(ctx, gsvc.svc); err != nil {
-			log.Errorf("Create gbase8s service failed, err: %s", err.Error())
+		if errors.IsNotFound(err) {
+			//创建service
+			gsvc := NewGbase8sService(&gbase8sCluster)
+			if err := r.Create(ctx, gsvc.svc); err != nil {
+				log.Errorf("Create gbase8s service failed, err: %s", err.Error())
+				return ctrl.Result{}, err
+			}
+		} else {
 			return ctrl.Result{}, err
 		}
 	} else {
 		log.Infof("Get gbase8s service resource success")
 	}
 
+	//获取cm service资源
+	var cmservice corev1.Service
+	cmsvcReq := types.NamespacedName{
+		Name:      CM_SERVICE_NAME_PREFIX + req.Name,
+		Namespace: req.Namespace,
+	}
+	if err := r.Get(ctx, cmsvcReq, &cmservice); err != nil {
+		log.Infof("Unable to get cm service resource, error: %s", err.Error())
+
+		if errors.IsNotFound(err) {
+			//创建service
+			gsvc := NewCmService(&gbase8sCluster)
+			if err := r.Create(ctx, gsvc.svc); err != nil {
+				log.Errorf("Create cm service failed, err: %s", err.Error())
+				return ctrl.Result{}, err
+			}
+		} else {
+			return ctrl.Result{}, err
+		}
+	} else {
+		log.Infof("Get cm service resource success")
+	}
+
+	//gbase8s statefulset 处理
 	if gbase8sReplicas == 0 {
 		//创建statefulset
 		gsfs := NewGbase8sStatefulset(&gbase8sCluster)
@@ -179,6 +266,7 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			log.Errorf("Create gbase8s statefulset failed, err: %s", err.Error())
 			return ctrl.Result{}, err
 		}
+		gstatefulset = gsfs.sfs
 	} else if gbase8sReplicas != gbase8sExpectReplicas {
 		//更新statefulset
 		gsfs := NewGbase8sStatefulset(&gbase8sCluster)
@@ -189,20 +277,39 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		} else {
 			log.Info("Update gbase8s statefulset success")
 		}
+		gstatefulset = gsfs.sfs
 	}
 
-	//var pods corev1.Pod
-	//req.NamespacedName.Name = "gbase8s-cluster-0"
-	//if err := r.Get(ctx, req.NamespacedName, &pods); err != nil {
-	//	log.Error(err, "====unable to get gbase8s-cluster-0====")
-	//} else {
-	//	fmt.Println("===Get pod info success, ", pods.Spec.Hostname, pods.Status.Phase)
-	//}
+	//cm statefulset 处理
+	if cmReplicas == 0 {
+		//创建statefulset
+		cmsfs := NewCmStatefulset(&gbase8sCluster)
+		if err := r.Create(ctx, cmsfs.sfs); err != nil {
+			log.Errorf("Create cm statefulset failed, err: %s", err.Error())
+			return ctrl.Result{}, err
+		}
+		cmStatefulset = cmsfs.sfs
+	} else if cmReplicas != cmExpectReplicas {
+		//更新statefulset
+		gsfs := NewGbase8sStatefulset(&gbase8sCluster)
+		gsfs.sfs.Spec.Replicas = &cmExpectReplicas
+		if err := r.Update(ctx, gsfs.sfs); err != nil {
+			log.Errorf("Update cm statefulset failed, err: %s", err.Error())
+			return ctrl.Result{}, err
+		} else {
+			log.Info("Update cm statefulset success")
+		}
+		cmStatefulset = gsfs.sfs
+	}
 
-	//gbase8sCluster.Status.Status = "Running"
-	//if err := r.Status().Update(ctx, &gbase8sCluster); err != nil {
-	//	log.Error(err, "====unable to update gbase8s cluster status====")
-	//}
+	log.Info("#################start######################")
+
+	err := r.BuildCluster(&gbase8sCluster)
+	if err != nil {
+		log.Error("Unable to build gbase8s cluster, error: %s", err.Error())
+	}
+
+	log.Info("#################end######################")
 
 	return ctrl.Result{}, nil
 }

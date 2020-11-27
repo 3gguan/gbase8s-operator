@@ -73,12 +73,14 @@ func main() {
 		setupLog.Error(err, "unable to get exec client")
 	}
 
+	gbase8sClusterBuilder := controllers.NewGbase8sClusterBuilder(mgr.GetClient(), execInPod)
+
 	if err = (&controllers.Gbase8sClusterReconciler{
-		Client:    mgr.GetClient(),
-		Log:       ctrl.Log.WithName("controllers").WithName("Gbase8sCluster"),
-		Scheme:    mgr.GetScheme(),
-		ExecInPod: execInPod,
-		Event:     mgr.GetEventRecorderFor("gbase8s-operator-controller-manager"),
+		Client: mgr.GetClient(),
+		//Log:       ctrl.Log.WithName("controllers").WithName("Gbase8sCluster"),
+		Scheme:                mgr.GetScheme(),
+		Gbase8sClusterBuilder: gbase8sClusterBuilder,
+		Event:                 mgr.GetEventRecorderFor("gbase8s-operator-controller-manager"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Gbase8sCluster")
 		os.Exit(1)

@@ -50,7 +50,11 @@ type Gbase8sConfig struct {
 }
 
 type ConnectManagerConfig struct {
-	Replicas int32 `json:"replicas,omitempty"`
+	Replicas   int32            `json:"replicas,omitempty"`
+	Image      string           `json:"image,omitempty"`
+	SecretName string           `json:"secretName,omitempty"`
+	ConfigMap  Gbase8sConfigMap `json:"configMap,omitempty"`
+	Nodes      []Gbase8sNode    `json:"nodes,omitempty"`
 }
 
 // Gbase8sClusterSpec defines the desired state of Gbase8sCluster
@@ -60,7 +64,7 @@ type Gbase8sClusterSpec struct {
 
 	// Foo is an example field of Gbase8sCluster. Edit Gbase8sCluster_types.go to remove/update
 	// Foo string `json:"foo,omitempty"`
-	Namespace  string               `json:"namespace,omitempty"`
+	//Namespace  string               `json:"namespace,omitempty"`
 	Gbase8sCfg Gbase8sConfig        `json:"gbase8s,omitempty"`
 	CmCfg      ConnectManagerConfig `json:"connectManager,omitempty"`
 }
