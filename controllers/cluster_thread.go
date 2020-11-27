@@ -4,12 +4,10 @@ import (
 	gbase8sv1 "Gbase8sCluster/api/v1"
 	"Gbase8sCluster/util"
 	"context"
-	"fmt"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 	"sync"
@@ -127,16 +125,13 @@ func (c *ClusterThread) updateCluster(msg *QueueMsg) {
 
 		//获取期望pod个数
 		ctx := context.Background()
-		fmt.Println("===========")
 		var gbase8sExpectReplicas int32
 		var gbase8sCluster gbase8sv1.Gbase8sCluster
-		reqTemp := ctrl.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      msg.Name,
-				Namespace: msg.Namespace,
-			},
+		reqTemp := types.NamespacedName{
+			Name:      msg.Name,
+			Namespace: msg.Namespace,
 		}
-		if err := c.Get(ctx, reqTemp.NamespacedName, &gbase8sCluster); err != nil {
+		if err := c.Get(ctx, reqTemp, &gbase8sCluster); err != nil {
 			log.Errorf("Update cluster failed, cannot get gbase8s cluster, error: %s", err.Error())
 			return
 		}
@@ -147,13 +142,11 @@ func (c *ClusterThread) updateCluster(msg *QueueMsg) {
 
 		//获取所有pod
 		statefulset := &appsv1.StatefulSet{}
-		reqTemp = ctrl.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      "gbase8s-cluster",
-				Namespace: msg.Namespace,
-			},
+		reqTemp = types.NamespacedName{
+			Name:      GBASE8S_STATEFULSET_NAME_PREFIX + msg.Name,
+			Namespace: msg.Namespace,
 		}
-		if err := c.Get(ctx, reqTemp.NamespacedName, statefulset); err != nil {
+		if err := c.Get(ctx, reqTemp, statefulset); err != nil {
 			log.Errorf("Update cluster failed, cannot get gbase8s statefulset, error: %s", err.Error())
 			return
 		}
