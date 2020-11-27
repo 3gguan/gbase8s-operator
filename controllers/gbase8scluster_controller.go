@@ -92,7 +92,7 @@ func (r *Gbase8sClusterReconciler) createPVCs(pvcs []*corev1.PersistentVolumeCla
 						log.Infof("Create gbase8s pvc %s success", v.Name)
 					}
 				} else {
-					log.Error("Get gbase8s pvc %s failed, error: %s", v.Name, err.Error())
+					log.Errorf("Get gbase8s pvc %s failed, error: %s", v.Name, err.Error())
 					return err
 				}
 
@@ -306,7 +306,7 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	err := r.BuildCluster(&gbase8sCluster)
 	if err != nil {
-		log.Error("Unable to build gbase8s cluster, error: %s", err.Error())
+		log.Errorf("Unable to build gbase8s cluster, error: %s", err.Error())
 	}
 
 	log.Info("#################end######################")
