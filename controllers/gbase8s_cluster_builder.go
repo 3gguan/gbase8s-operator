@@ -107,11 +107,10 @@ func (r *Gbase8sClusterBuilder) BuildTrust(pods *corev1.PodList, trustStr string
 	}
 }
 
-func (r *Gbase8sClusterBuilder) BuildGbase8sSqlhost(pods *corev1.PodList, hostTemplate *[]string) {
-	//准备sqlhost字符串
+func (r *Gbase8sClusterBuilder) GenerateGbase8sSqlhostString(podNum int, hostTemplate *[]string) string {
 	var sqlhostStr strings.Builder
 	serverNameTemplate := strings.Replace((*hostTemplate)[0], "-", "_", -1)
-	for i := 0; i < len(pods.Items); i++ {
+	for i := 0; i < podNum; i++ {
 		serverName := fmt.Sprintf("%s_%d", serverNameTemplate, i)
 		hostName := fmt.Sprintf("%s-%d.%s", (*hostTemplate)[0], i, (*hostTemplate)[1])
 		sqlhostStr.WriteString(serverName)
@@ -125,8 +124,90 @@ func (r *Gbase8sClusterBuilder) BuildGbase8sSqlhost(pods *corev1.PodList, hostTe
 		sqlhostStr.WriteString(" 19088\n")
 	}
 
+	return sqlhostStr.String()
+}
+
+func (r *Gbase8sClusterBuilder) BuildGbase8sSqlhost(pods *corev1.PodList, hostTemplate *[]string) {
+	//准备sqlhost字符串
+	str := r.GenerateGbase8sSqlhostString(len(pods.Items), hostTemplate)
+
 	//向容器内写入sqlhost字符串
-	setSqlhostCmd := []string{"bash", "-c", "echo -e " + "'" + sqlhostStr.String() + "'" + " > /opt/gbase8s/etc/sqlhosts.ol_gbasedbt_1"}
+	setSqlhostCmd := []string{"bash", "-c", "echo -e " + "'" + str + "'" + " > /opt/gbase8s/etc/sqlhosts.ol_gbasedbt_1"}
+	for _, v := range pods.Items {
+		log.Infof("pod name: %s", v.Name)
+		if len(v.Status.ContainerStatuses) != 0 {
+			if v.Status.ContainerStatuses[0].State.Running != nil {
+				_, _, err := r.ExecInPod.Exec(setSqlhostCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
+				if err != nil {
+					log.Errorf("set sqlhost failed, error: %s", err.Error())
+				}
+			}
+		}
+	}
+}
+
+func (r *Gbase8sClusterBuilder) GenerateCmSqlhostString(
+	gbase8sPodNum, cmPodNum int,
+	gbase8sHostTemplate *[]string,
+	cmHostTemplate *[]string,
+	redirectGroupName, proxyGroupName string) string {
+
+	var rName, pName string
+	if len(redirectGroupName) != 0 {
+		rName = redirectGroupName
+	} else {
+		rName = CM_REDIRECT_GROUP_DEFAULT_NAME
+	}
+
+	if len(proxyGroupName) != 0 {
+		pName = proxyGroupName
+	} else {
+		pName = CM_PROXY_GROUP_DEFAULT_NAME
+	}
+
+	//gbase8s sqlhost
+	var sqlhostStr strings.Builder
+	sqlhostStr.WriteString("g_cluster group - - i=10\n")
+	serverNameTemplate := strings.Replace((*gbase8sHostTemplate)[0], "-", "_", -1)
+	for i := 0; i < gbase8sPodNum; i++ {
+		serverName := fmt.Sprintf("%s_%d", serverNameTemplate, i)
+		hostName := fmt.Sprintf("%s-%d.%s", (*gbase8sHostTemplate)[0], i, (*gbase8sHostTemplate)[1])
+		sqlhostStr.WriteString(serverName)
+		sqlhostStr.WriteString(" onsoctcp ")
+		sqlhostStr.WriteString(hostName)
+		sqlhostStr.WriteString(" 9088 g=g_cluster\n")
+	}
+
+	sqlhostStr.WriteString(rName)
+	sqlhostStr.WriteString(" group - - c=1\n")
+	cmRNameTemplate := "redirect_" + strings.Replace((*cmHostTemplate)[0], "-", "_", -1)
+	for i := 0; i < cmPodNum; i++ {
+		serverName := fmt.Sprintf("%s_%d", cmRNameTemplate, i)
+		hostName := fmt.Sprintf("%s-%d.%s", (*cmHostTemplate)[0], i, (*cmHostTemplate)[1])
+		sqlhostStr.WriteString(serverName)
+		sqlhostStr.WriteString(" onsoctcp ")
+		sqlhostStr.WriteString(hostName)
+		sqlhostStr.WriteString(fmt.Sprintf(" %d g=%s\n", CM_SLA_REDIRECT_PORT, rName))
+	}
+
+	sqlhostStr.WriteString(pName)
+	sqlhostStr.WriteString(" group - - c=1\n")
+	cmPNameTemplate := "proxy_" + strings.Replace((*cmHostTemplate)[0], "-", "_", -1)
+	for i := 0; i < cmPodNum; i++ {
+		serverName := fmt.Sprintf("%s_%d", cmPNameTemplate, i)
+		hostName := fmt.Sprintf("%s-%d.%s", (*cmHostTemplate)[0], i, (*cmHostTemplate)[1])
+		sqlhostStr.WriteString(serverName)
+		sqlhostStr.WriteString(" onsoctcp ")
+		sqlhostStr.WriteString(hostName)
+		sqlhostStr.WriteString(fmt.Sprintf(" %d g=%s\n", CM_SLA_PROXY_PORT, pName))
+	}
+
+	return sqlhostStr.String()
+}
+
+func (r *Gbase8sClusterBuilder) BuildCmSqlhost(pods *corev1.PodList, str string) {
+	//向容器内写入sqlhost字符串
+	setSqlhostCmd := []string{"bash", "-c", "echo -e " + "'" + str + "'" + " > /opt/gbase8s/etc/sqlhosts.cm"}
 	for _, v := range pods.Items {
 		log.Infof("pod name: %s", v.Name)
 		if len(v.Status.ContainerStatuses) != 0 {
@@ -194,6 +275,14 @@ func (r *Gbase8sClusterBuilder) BuildCluster(cluster *gbase8sv1.Gbase8sCluster) 
 	trustStr += r.GenerateTrustString(len(cmPods.Items), cmHostTemplate)
 	r.BuildTrust(gbase8sPods, trustStr)
 	r.BuildGbase8sSqlhost(gbase8sPods, gbase8sHostTemplate)
+	cmSqlhostStr := r.GenerateCmSqlhostString(
+		len(gbase8sPods.Items),
+		len(cmPods.Items),
+		gbase8sHostTemplate,
+		cmHostTemplate,
+		cluster.Spec.CmCfg.RedirectGroupName,
+		cluster.Spec.CmCfg.ProxyGroupName)
+	r.BuildCmSqlhost(cmPods, cmSqlhostStr)
 
 	r.AddMsg(&QueueMsg{
 		Name:      cluster.Name,

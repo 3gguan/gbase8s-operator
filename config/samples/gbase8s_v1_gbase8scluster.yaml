@@ -46,6 +46,8 @@ spec:
     replicas: 2
     image: cm:8.8
     secretName: gbase8s-secret
+    redirectGroupName: cmredirect
+    proxyGroupName: cmproxy
     configMap:
       name: cm-conf
       configKey: onconfig.ol_gbasedbt_1

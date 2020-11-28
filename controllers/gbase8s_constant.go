@@ -53,5 +53,7 @@ const (
 
 	CM_MOUNT_LOG_PATH = "/opt/gbase8s/logs"
 	//CM_STORAGE_CLASS_NAME = "cm-local-volume"
-	CM_PV_LOG_PREFIX = "cm-log-"
+	CM_PV_LOG_PREFIX               = "cm-log-"
+	CM_REDIRECT_GROUP_DEFAULT_NAME = "cm_redirect"
+	CM_PROXY_GROUP_DEFAULT_NAME    = "cm_proxy"
 )
