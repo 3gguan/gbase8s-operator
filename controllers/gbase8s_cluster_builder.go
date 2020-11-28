@@ -116,12 +116,12 @@ func (r *Gbase8sClusterBuilder) GenerateGbase8sSqlhostString(podNum int, hostTem
 		sqlhostStr.WriteString(serverName)
 		sqlhostStr.WriteString(" onsoctcp ")
 		sqlhostStr.WriteString(hostName)
-		sqlhostStr.WriteString(" 9088\n")
+		sqlhostStr.WriteString(fmt.Sprintf(" %d\n", GBASE8S_ONSOCTCP_PORT))
 
 		sqlhostStr.WriteString("dr_" + serverName)
 		sqlhostStr.WriteString(" drsoctcp ")
 		sqlhostStr.WriteString(hostName)
-		sqlhostStr.WriteString(" 19088\n")
+		sqlhostStr.WriteString(fmt.Sprintf(" %d\n", GBASE8S_DRSOCTCP_PORT))
 	}
 
 	return sqlhostStr.String()
@@ -175,7 +175,7 @@ func (r *Gbase8sClusterBuilder) GenerateCmSqlhostString(
 		sqlhostStr.WriteString(serverName)
 		sqlhostStr.WriteString(" onsoctcp ")
 		sqlhostStr.WriteString(hostName)
-		sqlhostStr.WriteString(" 9088 g=g_cluster\n")
+		sqlhostStr.WriteString(fmt.Sprintf(" %d g=g_cluster\n", GBASE8S_ONSOCTCP_PORT))
 	}
 
 	sqlhostStr.WriteString(rName)

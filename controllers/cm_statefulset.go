@@ -71,6 +71,10 @@ func NewCmStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulset {
 									Name:  "START_MANUAL",
 									Value: "1",
 								},
+								{
+									Name:  "AUTO_SERVER_NAME",
+									Value: "1",
+								},
 							},
 						},
 					},

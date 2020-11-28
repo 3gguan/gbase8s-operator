@@ -58,7 +58,7 @@ func NewGbase8sStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulse
 							},
 							Ports: []corev1.ContainerPort{
 								{
-									ContainerPort: 9088,
+									ContainerPort: GBASE8S_ONSOCTCP_PORT,
 									Name:          "onsoctcp",
 								},
 							},
