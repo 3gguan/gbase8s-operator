@@ -65,7 +65,7 @@ func (r *Gbase8sClusterReconciler) createPVs(pvs []*corev1.PersistentVolume, ctx
 					return err
 				}
 			} else {
-				log.Infof("Get gbase8s pv %s success", v.Name)
+				//log.Infof("Get gbase8s pv %s success", v.Name)
 			}
 		}
 	}
@@ -97,7 +97,7 @@ func (r *Gbase8sClusterReconciler) createPVCs(pvcs []*corev1.PersistentVolumeCla
 				}
 
 			} else {
-				log.Infof("Get gbase8s pvc %s success", v.Name)
+				//log.Infof("Get gbase8s pvc %s success", v.Name)
 			}
 			//else {
 			//	if err := r.Update(ctx, v); err != nil {
@@ -135,7 +135,7 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 		return ctrl.Result{}, err
 	} else {
-		log.Infof("Get gbase8s cluster resource success, gbase8s replicas: %d, cm replicas: %d", gbase8sCluster.Spec.Gbase8sCfg.Replicas, gbase8sCluster.Spec.CmCfg.Replicas)
+		//log.Infof("Get gbase8s cluster resource success, gbase8s replicas: %d, cm replicas: %d", gbase8sCluster.Spec.Gbase8sCfg.Replicas, gbase8sCluster.Spec.CmCfg.Replicas)
 		gbase8sExpectReplicas = gbase8sCluster.Spec.Gbase8sCfg.Replicas
 		cmExpectReplicas = gbase8sCluster.Spec.CmCfg.Replicas
 	}
@@ -182,14 +182,14 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		Namespace: req.Namespace,
 	}
 	if err := r.Get(ctx, gsfsReq, gstatefulset); err != nil {
-		log.Infof("Unable to get gbase8s statefulset resource, error: %s", err.Error())
+		//log.Infof("Unable to get gbase8s statefulset resource, error: %s", err.Error())
 		if errors.IsNotFound(err) {
 			gbase8sReplicas = 0
 		} else {
 			return ctrl.Result{}, err
 		}
 	} else {
-		log.Infof("Get gbase8s statefulset resource success, gbase8s replicas: %d", gstatefulset.Spec.Replicas)
+		//log.Infof("Get gbase8s statefulset resource success, gbase8s replicas: %d", gstatefulset.Spec.Replicas)
 		gbase8sReplicas = *gstatefulset.Spec.Replicas
 	}
 
@@ -201,14 +201,14 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		Namespace: req.Namespace,
 	}
 	if err := r.Get(ctx, cmSfsReq, cmStatefulset); err != nil {
-		log.Infof("Unable to get cm statefulset resource, error: %s", err.Error())
+		//log.Infof("Unable to get cm statefulset resource, error: %s", err.Error())
 		if errors.IsNotFound(err) {
 			cmReplicas = 0
 		} else {
 			return ctrl.Result{}, err
 		}
 	} else {
-		log.Infof("Get cm statefulset resource success, cm replicas: %d", cmStatefulset.Spec.Replicas)
+		//log.Infof("Get cm statefulset resource success, cm replicas: %d", cmStatefulset.Spec.Replicas)
 		cmReplicas = *cmStatefulset.Spec.Replicas
 	}
 
@@ -219,7 +219,7 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		Namespace: req.Namespace,
 	}
 	if err := r.Get(ctx, gsvcReq, &gservice); err != nil {
-		log.Infof("Unable to get gbase8s service resource, error: %s", err.Error())
+		//log.Infof("Unable to get gbase8s service resource, error: %s", err.Error())
 
 		if errors.IsNotFound(err) {
 			//创建service
@@ -232,7 +232,7 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			return ctrl.Result{}, err
 		}
 	} else {
-		log.Infof("Get gbase8s service resource success")
+		//log.Infof("Get gbase8s service resource success")
 	}
 
 	//获取cm service资源
@@ -242,7 +242,7 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		Namespace: req.Namespace,
 	}
 	if err := r.Get(ctx, cmsvcReq, &cmservice); err != nil {
-		log.Infof("Unable to get cm service resource, error: %s", err.Error())
+		//log.Infof("Unable to get cm service resource, error: %s", err.Error())
 
 		if errors.IsNotFound(err) {
 			//创建service
@@ -255,7 +255,7 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			return ctrl.Result{}, err
 		}
 	} else {
-		log.Infof("Get cm service resource success")
+		//log.Infof("Get cm service resource success")
 	}
 
 	//gbase8s statefulset 处理
@@ -275,7 +275,7 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			log.Errorf("Update gbase8s statefulset failed, err: %s", err.Error())
 			return ctrl.Result{}, err
 		} else {
-			log.Info("Update gbase8s statefulset success")
+			//log.Info("Update gbase8s statefulset success")
 		}
 		gstatefulset = gsfs.sfs
 	}
@@ -297,19 +297,19 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			log.Errorf("Update cm statefulset failed, err: %s", err.Error())
 			return ctrl.Result{}, err
 		} else {
-			log.Info("Update cm statefulset success")
+			//log.Info("Update cm statefulset success")
 		}
 		cmStatefulset = gsfs.sfs
 	}
 
-	log.Info("#################start######################")
+	//log.Info("#################start######################")
 
 	err := r.BuildCluster(&gbase8sCluster)
 	if err != nil {
 		log.Errorf("Unable to build gbase8s cluster, error: %s", err.Error())
 	}
 
-	log.Info("#################end######################")
+	//log.Info("#################end######################")
 
 	return ctrl.Result{}, nil
 }

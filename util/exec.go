@@ -113,7 +113,7 @@ func (r *ExecInPod) Exec(command []string, containerName, podName, namespace str
 		TTY:       false,
 	}, parameterCodec)
 
-	log.Info("Request URL:", req.URL().String())
+	//log.Info("Request URL:", req.URL().String())
 
 	exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
 	if err != nil {

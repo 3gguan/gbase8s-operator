@@ -69,6 +69,7 @@ func (c *ClusterThread) AddMsg(msg *QueueMsg) {
 }
 
 func (c *ClusterThread) procQueueMsg(key string, queue chan QueueMsg) {
+	log.Infof("thread %s start", key)
 	i := 1
 	for {
 		select {
@@ -88,6 +89,7 @@ func (c *ClusterThread) procQueueMsg(key string, queue chan QueueMsg) {
 			break
 		}
 	}
+	log.Infof("thread %s end", key)
 }
 
 func (c *ClusterThread) GetHostTemplate(pods *corev1.PodList) *[]string {
@@ -179,10 +181,10 @@ func isGbase8sClusterNormal(nodes *[]Gbase8sStatus) bool {
 	return true
 }
 
-//返回值：0:成功 1:继续等待 2:失败
 func (c *ClusterThread) updateGbase8sCluster(clusterName, namespaceName string) error {
 	for {
 		time.Sleep(time.Second * 3)
+		log.Infof("update gbase8s cluster %s %s", clusterName, namespaceName)
 
 		//获取期望pod个数
 		ctx := context.Background()
@@ -248,7 +250,7 @@ func (c *ClusterThread) updateGbase8sCluster(clusterName, namespaceName string) 
 					needWait = true
 					break
 				} else {
-					return errors.New("get rss status failed, error: " + err.Error())
+					return errors.New("get rss status failed, error: " + err.Error() + " " + stderr)
 				}
 			}
 
@@ -302,7 +304,7 @@ func (c *ClusterThread) updateGbase8sCluster(clusterName, namespaceName string) 
 		}
 
 		if isGbase8sClusterNormal(&nodes) {
-			return nil
+			return errors.New("success")
 		}
 
 		p, err := findRealGbase8sPrimary(&nodes)
@@ -335,6 +337,7 @@ func (c *ClusterThread) updateGbase8sCluster(clusterName, namespaceName string) 
 		}
 		if addNodes.Len() != 0 {
 			addCmd := []string{"bash", "-c", "source /env.sh" + addNodes.String()}
+			log.Infof("primary: %s, add cmd: %s", p.PodName, addNodes.String())
 			_, stderr, err := c.exeClient.Exec(addCmd, GBASE8S_CONTAINER_NAME, p.PodName, namespaceName, nil)
 			if err != nil {
 				return errors.New(fmt.Sprintf("add rss failed, exec pod: %s, err: %s, %s", p.PodName, err.Error(), stderr))
@@ -350,6 +353,7 @@ func (c *ClusterThread) updateGbase8sCluster(clusterName, namespaceName string) 
 					(*hostTemplate)[1] +
 					":8000/hac/getTape && sh /recover.sh tape && onmode -d RSS " +
 					p.ServerName}
+				log.Infof("secondary: %s, add to cluster", v.PodName)
 				_, stderr, err := c.exeClient.Exec(rssCmd, GBASE8S_CONTAINER_NAME, v.PodName, namespaceName, nil)
 				if err != nil {
 					return errors.New(fmt.Sprintf("exec rss failed, exec pod: %s, err: %s, %s", v.PodName, err.Error(), stderr))
@@ -364,6 +368,7 @@ func (c *ClusterThread) updateGbase8sCluster(clusterName, namespaceName string) 
 func (c *ClusterThread) updateCmCluster(clusterName, namespaceName string) error {
 	for {
 		time.Sleep(time.Second * 3)
+		log.Infof("update cm cluster %s %s", clusterName, namespaceName)
 
 		ctx := context.Background()
 		var cmExpectReplicas int32
@@ -421,12 +426,14 @@ func (c *ClusterThread) updateCmCluster(clusterName, namespaceName string) error
 			if err != nil {
 				return errors.New(fmt.Sprintf("get cm status failed, err: %s %s", err.Error(), stderr))
 			}
-			if stdout == "1" {
+			if stdout == "1\n" {
+				log.Infof("reload cm %s config", v.Name)
 				_, stderr, err := c.exeClient.Exec(reloadCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
 				if err != nil {
 					return errors.New(fmt.Sprintf("reload cm failed, err: %s %s", err.Error(), stderr))
 				}
 			} else {
+				log.Infof("start cm %s", v.Name)
 				_, stderr, err := c.exeClient.Exec(startCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
 				if err != nil {
 					return errors.New(fmt.Sprintf("start cm failed, err: %s %s", err.Error(), stderr))
@@ -441,100 +448,14 @@ func (c *ClusterThread) updateCmCluster(clusterName, namespaceName string) error
 func (c *ClusterThread) updateCluster(msg *QueueMsg) {
 
 	if err := c.updateGbase8sCluster(msg.Name, msg.Namespace); err != nil {
-		log.Errorf("update gbase8s cluster failed, err: %s", err.Error())
-		return
-	}
-
-	if err := c.updateCmCluster(msg.Name, msg.Namespace); err != nil {
-		log.Errorf("update cm cluster failed, err: %s", err.Error())
-		return
+		if err.Error() != "success" {
+			log.Errorf("update gbase8s cluster failed, err: %s", err.Error())
+		}
+	} else {
+		if err := c.updateCmCluster(msg.Name, msg.Namespace); err != nil {
+			log.Errorf("update cm cluster failed, err: %s", err.Error())
+		}
 	}
 
 	return
-	//for {
-
-	////获取期望pod个数
-	//ctx := context.Background()
-	//var gbase8sExpectReplicas, cmExpectReplicas int32
-	//var gbase8sCluster gbase8sv1.Gbase8sCluster
-	//reqTemp := types.NamespacedName{
-	//	Name:      msg.Name,
-	//	Namespace: msg.Namespace,
-	//}
-	//if err := c.Get(ctx, reqTemp, &gbase8sCluster); err != nil {
-	//	log.Errorf("Update cluster failed, cannot get gbase8s cluster, error: %s", err.Error())
-	//	return
-	//}
-	//gbase8sExpectReplicas = gbase8sCluster.Spec.Gbase8sCfg.Replicas
-	//if gbase8sExpectReplicas <= 1 {
-	//	return
-	//}
-	//cmExpectReplicas = gbase8sCluster.Spec.CmCfg.Replicas
-	//if cmExpectReplicas < 1 {
-	//	return
-	//}
-	//
-	////获取所有gbase8s pod
-	//gPodLabels := map[string]string{
-	//	GBASE8S_POD_LABEL_KEY: GBASE8S_POD_LABEL_VALUE_PREFIX + gbase8sCluster.Name,
-	//}
-	//gPods := &corev1.PodList{}
-	//opts := &client.ListOptions{
-	//	Namespace:     msg.Namespace,
-	//	LabelSelector: labels.SelectorFromSet(gPodLabels),
-	//}
-	//if err := c.List(ctx, gPods, opts); err != nil {
-	//	return
-	//}
-	//
-	//if gbase8sExpectReplicas != int32(len(gPods.Items)) {
-	//	continue
-	//}
-	//
-	////如果有pod没在运行状态，等待
-	//flag := 1
-	//for _, v := range gPods.Items {
-	//	if len(v.Status.ContainerStatuses) != 0 {
-	//		if v.Status.ContainerStatuses[0].State.Running == nil {
-	//			flag = 0
-	//			break
-	//		}
-	//	}
-	//}
-	//if flag == 0 {
-	//	continue
-	//}
-
-	//log.Infof("=== update gbase8s cluster %s start ===", gbase8sCluster.Name)
-	//ret := c.updateGbase8sCluster(gPods)
-	//log.Infof("=== update gbase8s cluster %s end ===", gbase8sCluster.Name)
-	//if ret == 1 {
-	//	continue
-	//} else if ret == 2 {
-	//	log.Errorf("update cluster %s failed", gbase8sCluster.Name)
-	//	return
-	//} else if ret == 0 {
-	//	//获取所有cm pod
-	//	cmPodLabels := map[string]string{
-	//		CM_POD_LABEL_KEY: CM_POD_LABEL_VALUE_PREFIX + gbase8sCluster.Name,
-	//	}
-	//	cmPods := &corev1.PodList{}
-	//	opts = &client.ListOptions{
-	//		Namespace:     msg.Namespace,
-	//		LabelSelector: labels.SelectorFromSet(cmPodLabels),
-	//	}
-	//	if err := c.List(ctx, cmPods, opts); err != nil {
-	//		return
-	//	}
-	//
-	//	if cmExpectReplicas != int32(len(cmPods.Items)) {
-	//		continue
-	//	}
-	//
-	//	c.updateCmCluster(cmPods)
-	//}
-	//
-	//log.Info("update cluster success")
-	//break
-	//}
 }

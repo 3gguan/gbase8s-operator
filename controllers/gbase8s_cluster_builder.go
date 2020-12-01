@@ -95,7 +95,7 @@ func (r *Gbase8sClusterBuilder) BuildTrust(pods *corev1.PodList, trustStr string
 	//向容器内写入互信字符串
 	setHostfileCmd := []string{"bash", "-c", "echo -e " + "'" + trustStr + "'" + " > /opt/gbase8s/etc/hostfile"}
 	for _, v := range pods.Items {
-		log.Infof("pod name: %s", v.Name)
+		//log.Infof("pod name: %s", v.Name)
 		if len(v.Status.ContainerStatuses) != 0 {
 			if v.Status.ContainerStatuses[0].State.Running != nil {
 				_, _, err := r.ExecInPod.Exec(setHostfileCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
@@ -134,7 +134,7 @@ func (r *Gbase8sClusterBuilder) BuildGbase8sSqlhost(pods *corev1.PodList, hostTe
 	//向容器内写入sqlhost字符串
 	setSqlhostCmd := []string{"bash", "-c", "echo -e " + "'" + str + "'" + " > /opt/gbase8s/etc/sqlhosts.ol_gbasedbt_1"}
 	for _, v := range pods.Items {
-		log.Infof("pod name: %s", v.Name)
+		//log.Infof("pod name: %s", v.Name)
 		if len(v.Status.ContainerStatuses) != 0 {
 			if v.Status.ContainerStatuses[0].State.Running != nil {
 				_, _, err := r.ExecInPod.Exec(setSqlhostCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
@@ -209,7 +209,7 @@ func (r *Gbase8sClusterBuilder) BuildCmSqlhost(pods *corev1.PodList, str string)
 	//向容器内写入sqlhost字符串
 	setSqlhostCmd := []string{"bash", "-c", "echo -e " + "'" + str + "'" + " > /opt/gbase8s/etc/sqlhosts.cm"}
 	for _, v := range pods.Items {
-		log.Infof("pod name: %s", v.Name)
+		//log.Infof("pod name: %s", v.Name)
 		if len(v.Status.ContainerStatuses) != 0 {
 			if v.Status.ContainerStatuses[0].State.Running != nil {
 				_, _, err := r.ExecInPod.Exec(setSqlhostCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
@@ -235,9 +235,9 @@ func (r *Gbase8sClusterBuilder) BuildCluster(cluster *gbase8sv1.Gbase8sCluster) 
 		}
 	}
 
-	log.Infof("get gbase8s pods success, pods num: %d", len(gbase8sPods.Items))
+	//log.Infof("get gbase8s pods success, pods num: %d", len(gbase8sPods.Items))
 	if expectGbase8sPodNum != int32(len(gbase8sPods.Items)) {
-		log.Info("gbase8s not build")
+		//log.Info("gbase8s not build")
 		return nil
 	}
 
@@ -254,9 +254,9 @@ func (r *Gbase8sClusterBuilder) BuildCluster(cluster *gbase8sv1.Gbase8sCluster) 
 		}
 	}
 
-	log.Infof("get cm pods success, pods num: %d", len(cmPods.Items))
+	//log.Infof("get cm pods success, pods num: %d", len(cmPods.Items))
 	if expectCmPodNum != int32(len(cmPods.Items)) {
-		log.Infof("cm not build")
+		//log.Infof("cm not build")
 		return nil
 	}
 
