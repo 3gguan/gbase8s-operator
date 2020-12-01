@@ -18,7 +18,7 @@ const (
 	GBASE8S_PVC_LOG_TEMPLATE_NAME     = "gbase8s-log"
 
 	//gbase8s相关
-	GBASE8S_STATEFULSET_NAME_PREFIX = "gbase8s-cluster-"
+	GBASE8S_STATEFULSET_NAME_PREFIX = "gc-"
 
 	GBASE8S_SERVICE_NAME_PREFIX        = "gbase8s-svc-"
 	GBASE8S_SERVICE_LABEL_KEY          = "gbase8ssvc"
@@ -39,7 +39,7 @@ const (
 	GBASE8S_DRSOCTCP_PORT = 19088
 
 	//cm相关
-	CM_STATEFULSET_NAME_PREFIX = "cm-cluster-"
+	CM_STATEFULSET_NAME_PREFIX = "cm-"
 
 	CM_SERVICE_NAME_PREFIX        = "cm-svc-"
 	CM_SERVICE_LABEL_KEY          = "cmsvc"
