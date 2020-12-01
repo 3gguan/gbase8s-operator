@@ -4,7 +4,8 @@ import (
 	gbase8sv1 "Gbase8sCluster/api/v1"
 	"Gbase8sCluster/util"
 	"context"
-	appsv1 "k8s.io/api/apps/v1"
+	"errors"
+	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -14,11 +15,18 @@ import (
 	"time"
 )
 
-type ContainerRole struct {
-	Name         string
-	Status       string
-	Role         string
-	HasSecondary bool
+type SubStatus struct {
+	ServerName string
+	Connected  bool
+}
+
+type Gbase8sStatus struct {
+	PodName       string
+	ServerName    string
+	Status        string
+	Role          string
+	Connected     bool
+	SecondaryList []SubStatus
 }
 
 type QueueMsg struct {
@@ -119,7 +127,60 @@ func (c *ClusterThread) GetHostTemplate(pods *corev1.PodList) *[]string {
 	return &hostname
 }
 
-func (c *ClusterThread) updateCluster(msg *QueueMsg) {
+/*
+以4个节点为例
+
+初始化：
+4标准。---返回数组中第一个节点作为主
+
+正常：
+1主 3备。 ---无动作
+
+新增：
+1主 3备 2标准。 ---标准变备
+
+异常：
+1废主 3备；2废主 2备；3废主 1备。 ---等待切主
+1废主 1主 2备。 ---已经切主，废主变备
+4废主。 ---不知所措
+*/
+func findRealGbase8sPrimary(nodes *[]Gbase8sStatus) (*Gbase8sStatus, error) {
+	var primaryNum, secondaryNum, standardNum int
+	for _, v := range *nodes {
+		if v.Role == GBASE8S_ROLE_PRIMARY {
+			primaryNum++
+			if v.Connected {
+				return &v, nil
+			}
+		} else if v.Role == GBASE8S_ROLE_RSS {
+			secondaryNum++
+		} else {
+			standardNum++
+		}
+	}
+	if standardNum == len(*nodes) {
+		return &((*nodes)[0]), nil
+	}
+	if secondaryNum != 0 {
+		return nil, errors.New("wait")
+	} else if primaryNum == len(*nodes) {
+		return nil, errors.New("all nodes damaged")
+	} else {
+		return nil, errors.New("internal error")
+	}
+}
+
+func isGbase8sClusterNormal(nodes *[]Gbase8sStatus) bool {
+	for _, v := range *nodes {
+		if !v.Connected {
+			return false
+		}
+	}
+	return true
+}
+
+//返回值：0:成功 1:继续等待 2:失败
+func (c *ClusterThread) updateGbase8sCluster(clusterName, namespaceName string) error {
 	for {
 		time.Sleep(time.Second * 3)
 
@@ -128,45 +189,37 @@ func (c *ClusterThread) updateCluster(msg *QueueMsg) {
 		var gbase8sExpectReplicas int32
 		var gbase8sCluster gbase8sv1.Gbase8sCluster
 		reqTemp := types.NamespacedName{
-			Name:      msg.Name,
-			Namespace: msg.Namespace,
+			Name:      clusterName,
+			Namespace: namespaceName,
 		}
 		if err := c.Get(ctx, reqTemp, &gbase8sCluster); err != nil {
-			log.Errorf("Update cluster failed, cannot get gbase8s cluster, error: %s", err.Error())
-			return
+			return errors.New("Update cluster failed, cannot get gbase8s cluster, error: " + err.Error())
 		}
 		gbase8sExpectReplicas = gbase8sCluster.Spec.Gbase8sCfg.Replicas
 		if gbase8sExpectReplicas <= 1 {
-			return
+			return errors.New("at least 2 gbase8s nodes needed")
 		}
 
-		//获取所有pod
-		statefulset := &appsv1.StatefulSet{}
-		reqTemp = types.NamespacedName{
-			Name:      GBASE8S_STATEFULSET_NAME_PREFIX + msg.Name,
-			Namespace: msg.Namespace,
+		//获取所有gbase8s pod
+		gPodLabels := map[string]string{
+			GBASE8S_POD_LABEL_KEY: GBASE8S_POD_LABEL_VALUE_PREFIX + gbase8sCluster.Name,
 		}
-		if err := c.Get(ctx, reqTemp, statefulset); err != nil {
-			log.Errorf("Update cluster failed, cannot get gbase8s statefulset, error: %s", err.Error())
-			return
-		}
-
-		pods := &corev1.PodList{}
+		gPods := &corev1.PodList{}
 		opts := &client.ListOptions{
-			Namespace:     msg.Namespace,
-			LabelSelector: labels.SelectorFromSet(statefulset.Spec.Template.Labels),
+			Namespace:     namespaceName,
+			LabelSelector: labels.SelectorFromSet(gPodLabels),
 		}
-		if err := c.List(ctx, pods, opts); err != nil {
-			continue
+		if err := c.List(ctx, gPods, opts); err != nil {
+			return errors.New("get gbase8s pods failed, err: " + err.Error())
 		}
 
-		if gbase8sExpectReplicas != int32(len(pods.Items)) {
+		if gbase8sExpectReplicas != int32(len(gPods.Items)) {
 			continue
 		}
 
 		//如果有pod没在运行状态，等待
 		flag := 1
-		for _, v := range pods.Items {
+		for _, v := range gPods.Items {
 			if len(v.Status.ContainerStatuses) != 0 {
 				if v.Status.ContainerStatuses[0].State.Running == nil {
 					flag = 0
@@ -179,19 +232,26 @@ func (c *ClusterThread) updateCluster(msg *QueueMsg) {
 		}
 
 		//获取所有容器的rss状态
-		var roles []ContainerRole
-		onstatCmd := []string{"bash", "-c", "source /env.sh && onstat -g rss"}
-		for _, v := range pods.Items {
-			tempRole := ContainerRole{
-				Name:         v.Name,
-				HasSecondary: false,
+		var nodes []Gbase8sStatus
+		onstatCmd := []string{"bash", "-c", "source /env.sh && onstat -g rss verbose"}
+		needWait := false
+		for _, v := range gPods.Items {
+			tempRole := Gbase8sStatus{
+				PodName:    v.Name,
+				ServerName: strings.Replace(v.Name, "-", "_", -1),
+				Status:     GBASE8S_STATUS_NONE,
+				Connected:  false,
 			}
-			stdout, _, err := c.exeClient.Exec(onstatCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
+			stdout, stderr, err := c.exeClient.Exec(onstatCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
 			if err != nil {
-				log.Errorf("get rss status failed, error: %s", err.Error())
+				if strings.Contains(stderr, "shared memory not initialized") {
+					needWait = true
+					break
+				} else {
+					return errors.New("get rss status failed, error: " + err.Error())
+				}
 			}
 
-			//log.Info(stdout)
 			list1 := strings.Split(stdout, "\n")
 			for _, v := range list1 {
 				if strings.Contains(v, "GBase Database Server Version") {
@@ -204,102 +264,277 @@ func (c *ClusterThread) updateCluster(msg *QueueMsg) {
 					if len(list2) == 2 {
 						tempRole.Role = strings.TrimSpace(list2[1])
 					}
-				} else if strings.Contains(v, "Connected") {
-					tempRole.HasSecondary = true
+				} else if strings.Contains(v, "RSS server name") {
+					list2 := strings.Split(v, ":")
+					if len(list2) == 2 {
+						tempName := strings.TrimSpace(list2[1])
+						tempRole.SecondaryList = append(tempRole.SecondaryList, SubStatus{
+							ServerName: tempName,
+							Connected:  false,
+						})
+					}
+				} else if strings.Contains(v, "RSS connection status") {
+					list2 := strings.Split(v, ":")
+					if len(list2) == 2 {
+						if strings.TrimSpace(list2[1]) == "Connected" {
+							tempRole.SecondaryList[len(tempRole.SecondaryList)-1].Connected = true
+						}
+					}
 				}
 			}
 
-			roles = append(roles, tempRole)
-		}
-		//fmt.Println(roles)
-		//有没启动完成的等待下次
-		flag = 1
-		for _, v := range roles {
-			if v.Status != GBASE8S_STATUS_ONLINE {
-				flag = 0
+			if strings.Contains(stdout, "Connected") {
+				tempRole.Connected = true
+			}
+			nodes = append(nodes, tempRole)
+
+			//有没启动完成的等待下次
+			if tempRole.Status == GBASE8S_STATUS_NONE ||
+				tempRole.Status == GBASE8S_STATUS_INIT ||
+				tempRole.Status == GBASE8S_STATUS_FAST_RECOVERY {
+				needWait = true
 				break
+			}
+		}
+
+		if needWait {
+			continue
+		}
+
+		if isGbase8sClusterNormal(&nodes) {
+			return nil
+		}
+
+		p, err := findRealGbase8sPrimary(&nodes)
+		if err != nil {
+			if err.Error() == "wait" {
+				continue
+			} else {
+				return errors.New("find real gbase8s primary failed, err: " + err.Error())
+			}
+		}
+
+		hostTemplate := c.GetHostTemplate(gPods)
+
+		//向主节点添加辅节点
+		var addNodes strings.Builder
+		for _, v := range nodes {
+			if v.PodName != p.PodName && !v.Connected {
+				bfind := false
+				for _, vs := range p.SecondaryList {
+					if vs.ServerName == v.ServerName {
+						bfind = true
+						break
+					}
+				}
+				if !bfind {
+					addNodes.WriteString("&& onmode -d add RSS ")
+					addNodes.WriteString(v.ServerName)
+				}
+			}
+		}
+		if addNodes.Len() != 0 {
+			addCmd := []string{"bash", "-c", "source /env.sh" + addNodes.String()}
+			_, stderr, err := c.exeClient.Exec(addCmd, GBASE8S_CONTAINER_NAME, p.PodName, namespaceName, nil)
+			if err != nil {
+				return errors.New(fmt.Sprintf("add rss failed, exec pod: %s, err: %s, %s", p.PodName, err.Error(), stderr))
+			}
+		}
+
+		//辅节点加入集群
+		for _, v := range nodes {
+			if v.PodName != p.PodName && !v.Connected {
+				rssCmd := []string{"bash", "-c", "source /env.sh && curl -o tape http://" +
+					p.PodName +
+					"." +
+					(*hostTemplate)[1] +
+					":8000/hac/getTape && sh /recover.sh tape && onmode -d RSS " +
+					p.ServerName}
+				_, stderr, err := c.exeClient.Exec(rssCmd, GBASE8S_CONTAINER_NAME, v.PodName, namespaceName, nil)
+				if err != nil {
+					return errors.New(fmt.Sprintf("exec rss failed, exec pod: %s, err: %s, %s", v.PodName, err.Error(), stderr))
+				}
+			}
+		}
+
+		return nil
+	}
+}
+
+func (c *ClusterThread) updateCmCluster(clusterName, namespaceName string) error {
+	for {
+		time.Sleep(time.Second * 3)
+
+		ctx := context.Background()
+		var cmExpectReplicas int32
+		var gbase8sCluster gbase8sv1.Gbase8sCluster
+		reqTemp := types.NamespacedName{
+			Name:      clusterName,
+			Namespace: namespaceName,
+		}
+		if err := c.Get(ctx, reqTemp, &gbase8sCluster); err != nil {
+			return errors.New("Update cluster failed, cannot get gbase8s cluster, error: %s" + err.Error())
+		}
+
+		cmExpectReplicas = gbase8sCluster.Spec.CmCfg.Replicas
+		if cmExpectReplicas < 1 {
+			return errors.New("at least 1 cm nodes needed")
+		}
+
+		//获取cm pods
+		cmPodLabels := map[string]string{
+			CM_POD_LABEL_KEY: CM_POD_LABEL_VALUE_PREFIX + gbase8sCluster.Name,
+		}
+		cmPods := &corev1.PodList{}
+		opts := &client.ListOptions{
+			Namespace:     namespaceName,
+			LabelSelector: labels.SelectorFromSet(cmPodLabels),
+		}
+		if err := c.List(ctx, cmPods, opts); err != nil {
+			return errors.New("get cm pods failed, err: " + err.Error())
+		}
+
+		if cmExpectReplicas != int32(len(cmPods.Items)) {
+			continue
+		}
+
+		//如果有pod没在运行状态，等待
+		flag := 1
+		for _, v := range cmPods.Items {
+			if len(v.Status.ContainerStatuses) != 0 {
+				if v.Status.ContainerStatuses[0].State.Running == nil {
+					flag = 0
+					break
+				}
 			}
 		}
 		if flag == 0 {
 			continue
 		}
 
-		hostTemplate := c.GetHostTemplate(pods)
-
-		//标准节点个数
-		standardCount := 0
-		//主节点个数
-		primaryCount := 0
-		//辅节点个数
-		secondaryCount := 0
-		//真正主节点个数
-		hasSendaryCount := 0
-		for _, v := range roles {
-			if v.Role == GBASE8S_ROLE_STANDARD {
-				standardCount++
-			} else if v.Role == GBASE8S_ROLE_PRIMARY {
-				primaryCount++
-			} else if v.Role == GBASE8S_ROLE_RSS {
-				secondaryCount++
-			}
-			if v.HasSecondary == true {
-				hasSendaryCount++
-			}
-		}
-
-		if int32(standardCount+primaryCount+secondaryCount) < gbase8sExpectReplicas {
-			continue
-		}
-
-		if int32(standardCount) == gbase8sExpectReplicas {
-			//集群没建立过
-			log.Info("gbase8s cluster init")
-			addCmd := ""
-			for i, v := range pods.Items {
-				if i == 0 {
-					continue
-				}
-				addCmd += " && onmode -d add RSS " + strings.Replace(v.Name, "-", "_", -1)
-			}
-			addRssCmd := []string{"bash", "-c", "source /env.sh" + addCmd}
-			_, _, err := c.exeClient.Exec(addRssCmd, pods.Items[0].Spec.Containers[0].Name, pods.Items[0].Name, pods.Items[0].Namespace, nil)
+		//启动cm或重新加载cm配置
+		statCmd := []string{"bash", "-c", "ps -ef|grep oncmsm|grep -v grep|wc -l"}
+		startCmd := []string{"bash", "-c", "source /env.sh && sh start_manual.sh"}
+		reloadCmd := []string{"bash", "-c", "source /env.sh && oncmsm -r -c /opt/gbase8s/etc/cfg.cm"}
+		for _, v := range cmPods.Items {
+			stdout, stderr, err := c.exeClient.Exec(statCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
 			if err != nil {
-				log.Errorf("add rss failed, exec pod: %s, err: %s", pods.Items[0].Name, err.Error())
-				return
+				return errors.New(fmt.Sprintf("get cm status failed, err: %s %s", err.Error(), stderr))
 			}
-
-			//rssCmd := []string{"curl", "-o", "http://" + pods.Items[0].Name + "." + (*msg.hostTemplate)[1] + ":8000/hac/getTape"}
-			//recoverCmd := []string{"sh", "/recover.sh", ""}
-			rssCmd := []string{"bash", "-c", "source /env.sh && curl -o tape http://" +
-				pods.Items[0].Name +
-				"." +
-				(*hostTemplate)[1] +
-				":8000/hac/getTape && sh /recover.sh tape && onmode -d RSS " +
-				strings.Replace(pods.Items[0].Name, "-", "_", -1)}
-			for i, v := range pods.Items {
-				if i != 0 {
-					_, _, err := c.exeClient.Exec(rssCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
-					if err != nil {
-						log.Errorf("exec rss failed, exec pod: %s, err: %s", v.Name, err.Error())
-						return
-					}
+			if stdout == "1" {
+				_, stderr, err := c.exeClient.Exec(reloadCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
+				if err != nil {
+					return errors.New(fmt.Sprintf("reload cm failed, err: %s %s", err.Error(), stderr))
+				}
+			} else {
+				_, stderr, err := c.exeClient.Exec(startCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
+				if err != nil {
+					return errors.New(fmt.Sprintf("start cm failed, err: %s %s", err.Error(), stderr))
 				}
 			}
-		} else if (hasSendaryCount == 1) && (int32(secondaryCount) == (gbase8sExpectReplicas - 1)) {
-			//集群正常（controller重启可能会是这种情况）
-			log.Info("gbase8s cluster normal")
-		} else {
-			//集群坏掉了，重建集群
-			if hasSendaryCount == 0 {
-				//主节点down，还没切换
-				continue
-			}
-			//else if (primaryCount == 1) && (int32(secondaryCount) < (gbase8sExpectReplicas - 1)) {
-			//	//主节点down，已经切换，需要重建集群
-			//} else if primaryCount
 		}
 
-		log.Info("update cluster success")
-		break
+		return nil
 	}
+}
+
+func (c *ClusterThread) updateCluster(msg *QueueMsg) {
+
+	if err := c.updateGbase8sCluster(msg.Name, msg.Namespace); err != nil {
+		log.Errorf("update gbase8s cluster failed, err: %s", err.Error())
+		return
+	}
+
+	if err := c.updateCmCluster(msg.Name, msg.Namespace); err != nil {
+		log.Errorf("update cm cluster failed, err: %s", err.Error())
+		return
+	}
+
+	return
+	//for {
+
+	////获取期望pod个数
+	//ctx := context.Background()
+	//var gbase8sExpectReplicas, cmExpectReplicas int32
+	//var gbase8sCluster gbase8sv1.Gbase8sCluster
+	//reqTemp := types.NamespacedName{
+	//	Name:      msg.Name,
+	//	Namespace: msg.Namespace,
+	//}
+	//if err := c.Get(ctx, reqTemp, &gbase8sCluster); err != nil {
+	//	log.Errorf("Update cluster failed, cannot get gbase8s cluster, error: %s", err.Error())
+	//	return
+	//}
+	//gbase8sExpectReplicas = gbase8sCluster.Spec.Gbase8sCfg.Replicas
+	//if gbase8sExpectReplicas <= 1 {
+	//	return
+	//}
+	//cmExpectReplicas = gbase8sCluster.Spec.CmCfg.Replicas
+	//if cmExpectReplicas < 1 {
+	//	return
+	//}
+	//
+	////获取所有gbase8s pod
+	//gPodLabels := map[string]string{
+	//	GBASE8S_POD_LABEL_KEY: GBASE8S_POD_LABEL_VALUE_PREFIX + gbase8sCluster.Name,
+	//}
+	//gPods := &corev1.PodList{}
+	//opts := &client.ListOptions{
+	//	Namespace:     msg.Namespace,
+	//	LabelSelector: labels.SelectorFromSet(gPodLabels),
+	//}
+	//if err := c.List(ctx, gPods, opts); err != nil {
+	//	return
+	//}
+	//
+	//if gbase8sExpectReplicas != int32(len(gPods.Items)) {
+	//	continue
+	//}
+	//
+	////如果有pod没在运行状态，等待
+	//flag := 1
+	//for _, v := range gPods.Items {
+	//	if len(v.Status.ContainerStatuses) != 0 {
+	//		if v.Status.ContainerStatuses[0].State.Running == nil {
+	//			flag = 0
+	//			break
+	//		}
+	//	}
+	//}
+	//if flag == 0 {
+	//	continue
+	//}
+
+	//log.Infof("=== update gbase8s cluster %s start ===", gbase8sCluster.Name)
+	//ret := c.updateGbase8sCluster(gPods)
+	//log.Infof("=== update gbase8s cluster %s end ===", gbase8sCluster.Name)
+	//if ret == 1 {
+	//	continue
+	//} else if ret == 2 {
+	//	log.Errorf("update cluster %s failed", gbase8sCluster.Name)
+	//	return
+	//} else if ret == 0 {
+	//	//获取所有cm pod
+	//	cmPodLabels := map[string]string{
+	//		CM_POD_LABEL_KEY: CM_POD_LABEL_VALUE_PREFIX + gbase8sCluster.Name,
+	//	}
+	//	cmPods := &corev1.PodList{}
+	//	opts = &client.ListOptions{
+	//		Namespace:     msg.Namespace,
+	//		LabelSelector: labels.SelectorFromSet(cmPodLabels),
+	//	}
+	//	if err := c.List(ctx, cmPods, opts); err != nil {
+	//		return
+	//	}
+	//
+	//	if cmExpectReplicas != int32(len(cmPods.Items)) {
+	//		continue
+	//	}
+	//
+	//	c.updateCmCluster(cmPods)
+	//}
+	//
+	//log.Info("update cluster success")
+	//break
+	//}
 }

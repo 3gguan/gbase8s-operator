@@ -1,9 +1,11 @@
 package controllers
 
 const (
+	GBASE8S_STATUS_NONE          = "None"
 	GBASE8S_STATUS_INIT          = "Initialization"
 	GBASE8S_STATUS_FAST_RECOVERY = "Fast Recovery"
 	GBASE8S_STATUS_ONLINE        = "On-Line"
+	GBASE8S_STATUS_RSS           = "Read-Only (RSS)"
 
 	GBASE8S_ROLE_STANDARD = "Standard"
 	GBASE8S_ROLE_PRIMARY  = "Primary"
