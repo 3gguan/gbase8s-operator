@@ -291,7 +291,7 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		cmStatefulset = cmsfs.sfs
 	} else if cmReplicas != cmExpectReplicas {
 		//更新statefulset
-		gsfs := NewGbase8sStatefulset(&gbase8sCluster)
+		gsfs := NewCmStatefulset(&gbase8sCluster)
 		gsfs.sfs.Spec.Replicas = &cmExpectReplicas
 		if err := r.Update(ctx, gsfs.sfs); err != nil {
 			log.Errorf("Update cm statefulset failed, err: %s", err.Error())

@@ -181,6 +181,64 @@ func isGbase8sClusterNormal(nodes *[]Gbase8sStatus) bool {
 	return true
 }
 
+func (c *ClusterThread) getNodesRssStatus(pods *corev1.PodList) (*[]Gbase8sStatus, error) {
+	var nodes []Gbase8sStatus
+	onstatCmd := []string{"bash", "-c", "source /env.sh && onstat -g rss verbose"}
+	//needWait := false
+	for _, v := range pods.Items {
+		tempRole := Gbase8sStatus{
+			PodName:    v.Name,
+			ServerName: strings.Replace(v.Name, "-", "_", -1),
+			Status:     GBASE8S_STATUS_NONE,
+			Connected:  false,
+		}
+		stdout, stderr, err := c.exeClient.Exec(onstatCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
+		if err != nil {
+			if !strings.Contains(stderr, "shared memory not initialized") {
+				return nil, errors.New("get rss status failed, error: " + err.Error() + " " + stderr)
+			}
+		}
+
+		list1 := strings.Split(stdout, "\n")
+		for _, v := range list1 {
+			if strings.Contains(v, "GBase Database Server Version") {
+				list2 := strings.Split(v, "--")
+				if len(list2) == 4 {
+					tempRole.Status = strings.TrimSpace(list2[1])
+				}
+			} else if strings.Contains(v, "Local server type") {
+				list2 := strings.Split(v, ":")
+				if len(list2) == 2 {
+					tempRole.Role = strings.TrimSpace(list2[1])
+				}
+			} else if strings.Contains(v, "RSS server name") {
+				list2 := strings.Split(v, ":")
+				if len(list2) == 2 {
+					tempName := strings.TrimSpace(list2[1])
+					tempRole.SecondaryList = append(tempRole.SecondaryList, SubStatus{
+						ServerName: tempName,
+						Connected:  false,
+					})
+				}
+			} else if strings.Contains(v, "RSS connection status") {
+				list2 := strings.Split(v, ":")
+				if len(list2) == 2 {
+					if strings.TrimSpace(list2[1]) == "Connected" {
+						tempRole.SecondaryList[len(tempRole.SecondaryList)-1].Connected = true
+					}
+				}
+			}
+		}
+
+		if strings.Contains(stdout, "Connected") {
+			tempRole.Connected = true
+		}
+		nodes = append(nodes, tempRole)
+	}
+
+	return &nodes, nil
+}
+
 func (c *ClusterThread) updateGbase8sCluster(clusterName, namespaceName string) error {
 	for {
 		time.Sleep(time.Second * 3)
@@ -234,80 +292,98 @@ func (c *ClusterThread) updateGbase8sCluster(clusterName, namespaceName string) 
 		}
 
 		//获取所有容器的rss状态
-		var nodes []Gbase8sStatus
-		onstatCmd := []string{"bash", "-c", "source /env.sh && onstat -g rss verbose"}
+		nodes, err := c.getNodesRssStatus(gPods)
+		if err != nil {
+			return err
+		}
+
 		needWait := false
-		for _, v := range gPods.Items {
-			tempRole := Gbase8sStatus{
-				PodName:    v.Name,
-				ServerName: strings.Replace(v.Name, "-", "_", -1),
-				Status:     GBASE8S_STATUS_NONE,
-				Connected:  false,
-			}
-			stdout, stderr, err := c.exeClient.Exec(onstatCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
-			if err != nil {
-				if strings.Contains(stderr, "shared memory not initialized") {
-					needWait = true
-					break
-				} else {
-					return errors.New("get rss status failed, error: " + err.Error() + " " + stderr)
-				}
-			}
-
-			list1 := strings.Split(stdout, "\n")
-			for _, v := range list1 {
-				if strings.Contains(v, "GBase Database Server Version") {
-					list2 := strings.Split(v, "--")
-					if len(list2) == 4 {
-						tempRole.Status = strings.TrimSpace(list2[1])
-					}
-				} else if strings.Contains(v, "Local server type") {
-					list2 := strings.Split(v, ":")
-					if len(list2) == 2 {
-						tempRole.Role = strings.TrimSpace(list2[1])
-					}
-				} else if strings.Contains(v, "RSS server name") {
-					list2 := strings.Split(v, ":")
-					if len(list2) == 2 {
-						tempName := strings.TrimSpace(list2[1])
-						tempRole.SecondaryList = append(tempRole.SecondaryList, SubStatus{
-							ServerName: tempName,
-							Connected:  false,
-						})
-					}
-				} else if strings.Contains(v, "RSS connection status") {
-					list2 := strings.Split(v, ":")
-					if len(list2) == 2 {
-						if strings.TrimSpace(list2[1]) == "Connected" {
-							tempRole.SecondaryList[len(tempRole.SecondaryList)-1].Connected = true
-						}
-					}
-				}
-			}
-
-			if strings.Contains(stdout, "Connected") {
-				tempRole.Connected = true
-			}
-			nodes = append(nodes, tempRole)
-
-			//有没启动完成的等待下次
-			if tempRole.Status == GBASE8S_STATUS_NONE ||
-				tempRole.Status == GBASE8S_STATUS_INIT ||
-				tempRole.Status == GBASE8S_STATUS_FAST_RECOVERY {
+		for _, v := range *nodes {
+			if v.Status == GBASE8S_STATUS_NONE ||
+				v.Status == GBASE8S_STATUS_INIT ||
+				v.Status == GBASE8S_STATUS_FAST_RECOVERY {
 				needWait = true
 				break
 			}
 		}
-
 		if needWait {
 			continue
 		}
 
-		if isGbase8sClusterNormal(&nodes) {
+		//var nodes []Gbase8sStatus
+		//onstatCmd := []string{"bash", "-c", "source /env.sh && onstat -g rss verbose"}
+		//needWait := false
+		//for _, v := range gPods.Items {
+		//	tempRole := Gbase8sStatus{
+		//		PodName:    v.Name,
+		//		ServerName: strings.Replace(v.Name, "-", "_", -1),
+		//		Status:     GBASE8S_STATUS_NONE,
+		//		Connected:  false,
+		//	}
+		//	stdout, stderr, err := c.exeClient.Exec(onstatCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
+		//	if err != nil {
+		//		if strings.Contains(stderr, "shared memory not initialized") {
+		//			needWait = true
+		//			break
+		//		} else {
+		//			return errors.New("get rss status failed, error: " + err.Error() + " " + stderr)
+		//		}
+		//	}
+		//
+		//	list1 := strings.Split(stdout, "\n")
+		//	for _, v := range list1 {
+		//		if strings.Contains(v, "GBase Database Server Version") {
+		//			list2 := strings.Split(v, "--")
+		//			if len(list2) == 4 {
+		//				tempRole.Status = strings.TrimSpace(list2[1])
+		//			}
+		//		} else if strings.Contains(v, "Local server type") {
+		//			list2 := strings.Split(v, ":")
+		//			if len(list2) == 2 {
+		//				tempRole.Role = strings.TrimSpace(list2[1])
+		//			}
+		//		} else if strings.Contains(v, "RSS server name") {
+		//			list2 := strings.Split(v, ":")
+		//			if len(list2) == 2 {
+		//				tempName := strings.TrimSpace(list2[1])
+		//				tempRole.SecondaryList = append(tempRole.SecondaryList, SubStatus{
+		//					ServerName: tempName,
+		//					Connected:  false,
+		//				})
+		//			}
+		//		} else if strings.Contains(v, "RSS connection status") {
+		//			list2 := strings.Split(v, ":")
+		//			if len(list2) == 2 {
+		//				if strings.TrimSpace(list2[1]) == "Connected" {
+		//					tempRole.SecondaryList[len(tempRole.SecondaryList)-1].Connected = true
+		//				}
+		//			}
+		//		}
+		//	}
+		//
+		//	if strings.Contains(stdout, "Connected") {
+		//		tempRole.Connected = true
+		//	}
+		//	nodes = append(nodes, tempRole)
+		//
+		//	//有没启动完成的等待下次
+		//	if tempRole.Status == GBASE8S_STATUS_NONE ||
+		//		tempRole.Status == GBASE8S_STATUS_INIT ||
+		//		tempRole.Status == GBASE8S_STATUS_FAST_RECOVERY {
+		//		needWait = true
+		//		break
+		//	}
+		//}
+		//
+		//if needWait {
+		//	continue
+		//}
+
+		if isGbase8sClusterNormal(nodes) {
 			return errors.New("success")
 		}
 
-		p, err := findRealGbase8sPrimary(&nodes)
+		p, err := findRealGbase8sPrimary(nodes)
 		if err != nil {
 			if err.Error() == "wait" {
 				continue
@@ -320,7 +396,7 @@ func (c *ClusterThread) updateGbase8sCluster(clusterName, namespaceName string) 
 
 		//向主节点添加辅节点
 		var addNodes strings.Builder
-		for _, v := range nodes {
+		for _, v := range *nodes {
 			if v.PodName != p.PodName && !v.Connected {
 				bfind := false
 				for _, vs := range p.SecondaryList {
@@ -345,7 +421,7 @@ func (c *ClusterThread) updateGbase8sCluster(clusterName, namespaceName string) 
 		}
 
 		//辅节点加入集群
-		for _, v := range nodes {
+		for _, v := range *nodes {
 			if v.PodName != p.PodName && !v.Connected {
 				rssCmd := []string{"bash", "-c", "source /env.sh && curl -o tape http://" +
 					p.PodName +
@@ -361,11 +437,41 @@ func (c *ClusterThread) updateGbase8sCluster(clusterName, namespaceName string) 
 			}
 		}
 
+		//retryCount := 0
+		//for {
+		//	time.Sleep(time.Second * 3)
+		//	//检查rss状态
+		//	lastNodes, lastErr := c.getNodesRssStatus(gPods)
+		//	if lastErr != nil {
+		//		return lastErr
+		//	}
+		//
+		//	needWait = false
+		//	for _, v := range *lastNodes {
+		//		if v.Status != GBASE8S_STATUS_ONLINE &&
+		//			v.Status != GBASE8S_STATUS_RSS {
+		//			needWait = true
+		//			break
+		//		}
+		//	}
+		//
+		//	retryCount ++
+		//	if retryCount > 10 {
+		//		break
+		//	}
+		//
+		//	if needWait {
+		//		continue
+		//	} else {
+		//		break
+		//	}
+		//}
+
 		return nil
 	}
 }
 
-func (c *ClusterThread) updateCmCluster(clusterName, namespaceName string) error {
+func (c *ClusterThread) updateCmCluster(clusterName, namespaceName string, needReloadCm bool) error {
 	for {
 		time.Sleep(time.Second * 3)
 		log.Infof("update cm cluster %s %s", clusterName, namespaceName)
@@ -427,10 +533,12 @@ func (c *ClusterThread) updateCmCluster(clusterName, namespaceName string) error
 				return errors.New(fmt.Sprintf("get cm status failed, err: %s %s", err.Error(), stderr))
 			}
 			if stdout == "1\n" {
-				log.Infof("reload cm %s config", v.Name)
-				_, stderr, err := c.exeClient.Exec(reloadCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
-				if err != nil {
-					return errors.New(fmt.Sprintf("reload cm failed, err: %s %s", err.Error(), stderr))
+				if needReloadCm {
+					log.Infof("reload cm %s config", v.Name)
+					stdout, stderr, err := c.exeClient.Exec(reloadCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
+					if err != nil {
+						return errors.New(fmt.Sprintf("reload cm failed, err: %s %s %s", err.Error(), stderr, stdout))
+					}
 				}
 			} else {
 				log.Infof("start cm %s", v.Name)
@@ -447,14 +555,19 @@ func (c *ClusterThread) updateCmCluster(clusterName, namespaceName string) error
 
 func (c *ClusterThread) updateCluster(msg *QueueMsg) {
 
+	needReloadCm := false
 	if err := c.updateGbase8sCluster(msg.Name, msg.Namespace); err != nil {
 		if err.Error() != "success" {
 			log.Errorf("update gbase8s cluster failed, err: %s", err.Error())
+			return
 		}
 	} else {
-		if err := c.updateCmCluster(msg.Name, msg.Namespace); err != nil {
-			log.Errorf("update cm cluster failed, err: %s", err.Error())
-		}
+		needReloadCm = true
+	}
+
+	needReloadCm = false
+	if err := c.updateCmCluster(msg.Name, msg.Namespace, needReloadCm); err != nil {
+		log.Errorf("update cm cluster failed, err: %s", err.Error())
 	}
 
 	return

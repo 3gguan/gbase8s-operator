@@ -4,6 +4,10 @@ const (
 	GBASE8S_STATUS_NONE          = "None"
 	GBASE8S_STATUS_INIT          = "Initialization"
 	GBASE8S_STATUS_FAST_RECOVERY = "Fast Recovery"
+	GBASE8S_STATUS_QUIES         = "Quiescent"
+	GBASE8S_STATUS_BACKUP        = "Archive Backup"
+	GBASE8S_STATUS_SHUTDN        = "Shutting Down"
+	GBASE8S_STATUS_ABORT         = "Abort"
 	GBASE8S_STATUS_ONLINE        = "On-Line"
 	GBASE8S_STATUS_RSS           = "Read-Only (RSS)"
 
