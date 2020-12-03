@@ -1,7 +1,7 @@
 apiVersion: gbase8s.gbase.cn/v1
 kind: Gbase8sCluster
 metadata:
-  name: gbase8scluster-sample
+  name: gbase8s-cluster1
 spec:
   # Add fields here
   # foo: bar
@@ -15,7 +15,7 @@ spec:
       onconfigKey: onconfig.ol_gbasedbt_1
       allowedKey: allowed.surrogates
     nodes:
-      - name: master
+      - name: node1
         storage:
           path: /local/storage1
           size: 2Gi
@@ -33,7 +33,7 @@ spec:
           path: /local/log2
           size: 2Gi
           volumeMode: Filesystem
-      - name: node1
+      - name: master
         storage:
           path: /local/storage3
           size: 2Gi
@@ -43,14 +43,14 @@ spec:
           size: 2Gi
           volumeMode: Filesystem
   connectManager:
-    replicas: 2
+    replicas: 1
     image: cm:8.8
     secretName: gbase8s-secret
     redirectGroupName: cmredirect
     proxyGroupName: cmproxy
     configMap:
-      name: cm-conf
-      configKey: onconfig.ol_gbasedbt_1
+      name: gbase8s-conf
+      configKey: cfg.cm
     nodes:
       - name: master
         log:
@@ -62,7 +62,7 @@ spec:
           path: /local/cmlog2
           size: 2Gi
           volumeMode: Filesystem
-      - name: node1
+      - name: master
         log:
           path: /local/cmlog3
           size: 2Gi

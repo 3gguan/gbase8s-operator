@@ -109,6 +109,58 @@ func NewCmStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulset {
 			}
 	}
 
+	if cluster.Spec.CmCfg.ConfigMap.Name != "" {
+		createStatefulset.Spec.Template.Spec.Volumes =
+			[]corev1.Volume{
+				{
+					Name: CM_CONF_VOLUME_NAME,
+					VolumeSource: corev1.VolumeSource{
+						ConfigMap: &corev1.ConfigMapVolumeSource{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: cluster.Spec.CmCfg.ConfigMap.Name,
+							},
+							Items: []corev1.KeyToPath{
+								{
+									Key:  cluster.Spec.CmCfg.ConfigMap.ConfigKey,
+									Path: cluster.Spec.CmCfg.ConfigMap.ConfigKey,
+								},
+							},
+						},
+					},
+				},
+			}
+
+		if cluster.Spec.CmCfg.ConfigMap.ConfigKey != "" {
+			createStatefulset.Spec.Template.Spec.Containers[0].VolumeMounts =
+				append(createStatefulset.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+					Name:      CM_CONF_VOLUME_NAME,
+					MountPath: CM_CONF_MOUNT_PATH,
+					SubPath:   cluster.Spec.CmCfg.ConfigMap.ConfigKey,
+				})
+
+			createStatefulset.Spec.Template.Spec.Containers[0].Env =
+				append(createStatefulset.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  CM_ENV_CONF_FILENAME,
+					Value: CM_CONF_MOUNT_PATH,
+				})
+		}
+	}
+
+	if cluster.Spec.CmCfg.SecretName != "" {
+		createStatefulset.Spec.Template.Spec.Containers[0].Env =
+			append(createStatefulset.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
+				Name: CM_GBASEDBT_PASSWORD_NAME,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: cluster.Spec.CmCfg.SecretName,
+						},
+						Key: CM_GBASEDBT_PASSWORD_KEY,
+					},
+				},
+			})
+	}
+
 	gsfs.sfs = &createStatefulset
 
 	return &gsfs

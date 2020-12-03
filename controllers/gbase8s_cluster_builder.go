@@ -48,9 +48,9 @@ func (r *Gbase8sClusterBuilder) GetHostTemplate(pods *corev1.PodList) *[]string 
 	for _, v := range pods.Items {
 		if len(v.Status.ContainerStatuses) != 0 {
 			if v.Status.ContainerStatuses[0].State.Running != nil {
-				stdout, _, err := r.ExecInPod.Exec(getHostCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
+				stdout, stderr, err := r.ExecInPod.Exec(getHostCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
 				if err != nil {
-					log.Errorf("get hostname failed, error: %s", err.Error())
+					log.Errorf("get hostname failed, error: %s %s", err.Error(), stderr)
 				} else {
 					if stdout != "" {
 						hostnameStr = stdout

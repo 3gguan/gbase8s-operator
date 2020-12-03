@@ -116,6 +116,71 @@ func NewGbase8sStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulse
 			}
 	}
 
+	if cluster.Spec.Gbase8sCfg.ConfigMap.Name != "" {
+		createStatefulset.Spec.Template.Spec.Volumes =
+			[]corev1.Volume{
+				{
+					Name: GBASE8S_CONF_VOLUME,
+					VolumeSource: corev1.VolumeSource{
+						ConfigMap: &corev1.ConfigMapVolumeSource{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: cluster.Spec.Gbase8sCfg.ConfigMap.Name,
+							},
+							Items: []corev1.KeyToPath{
+								{
+									Key:  cluster.Spec.Gbase8sCfg.ConfigMap.OnconfigKey,
+									Path: cluster.Spec.Gbase8sCfg.ConfigMap.OnconfigKey,
+								},
+								{
+									Key:  cluster.Spec.Gbase8sCfg.ConfigMap.AllowedKey,
+									Path: cluster.Spec.Gbase8sCfg.ConfigMap.AllowedKey,
+								},
+							},
+						},
+					},
+				},
+			}
+
+		if cluster.Spec.Gbase8sCfg.ConfigMap.OnconfigKey != "" {
+			createStatefulset.Spec.Template.Spec.Containers[0].VolumeMounts =
+				append(createStatefulset.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+					Name:      GBASE8S_CONF_VOLUME,
+					MountPath: GBASE8S_ONCONFIG_MOUNT_PATH,
+					SubPath:   cluster.Spec.Gbase8sCfg.ConfigMap.OnconfigKey,
+				})
+
+			createStatefulset.Spec.Template.Spec.Containers[0].Env =
+				append(createStatefulset.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  GBASE8S_ENV_ONCONFIG_FILENAME,
+					Value: GBASE8S_ONCONFIG_MOUNT_PATH,
+				})
+		}
+
+		if cluster.Spec.Gbase8sCfg.ConfigMap.AllowedKey != "" {
+			createStatefulset.Spec.Template.Spec.Containers[0].VolumeMounts =
+				append(createStatefulset.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+					Name:      GBASE8S_CONF_VOLUME,
+					MountPath: GBASE8S_ALLOWED_MOUNT_PATH,
+					SubPath:   cluster.Spec.Gbase8sCfg.ConfigMap.AllowedKey,
+				})
+		}
+	}
+
+	if cluster.Spec.Gbase8sCfg.SecretName != "" {
+		createStatefulset.Spec.Template.Spec.Containers[0].Env =
+			append(createStatefulset.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
+				Name: GBASE8S_GBASEDBT_PASSWORD_NAME,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: cluster.Spec.Gbase8sCfg.SecretName,
+						},
+						Key: GBASE8S_GBASEDBT_PASSWORD_KEY,
+					},
+				},
+			})
+	}
+
 	gsfs.sfs = &createStatefulset
 
 	return &gsfs

@@ -29,6 +29,11 @@ type Gbase8sConfigMap struct {
 	AllowedKey  string `json:"allowedKey,omitempty"`
 }
 
+type CmConfigMap struct {
+	Name      string `json:"name,omitempty"`
+	ConfigKey string `json:"configKey,omitempty"`
+}
+
 type Gbase8sStorage struct {
 	Path       string `json:"path,omitempty"`
 	Size       string `json:"size,omitempty"`
@@ -55,13 +60,13 @@ type Gbase8sConfig struct {
 }
 
 type CmConfig struct {
-	Replicas          int32            `json:"replicas,omitempty"`
-	Image             string           `json:"image,omitempty"`
-	SecretName        string           `json:"secretName,omitempty"`
-	RedirectGroupName string           `json:"redirectGroupName,omitempty"`
-	ProxyGroupName    string           `json:"proxyGroupName,omitempty"`
-	ConfigMap         Gbase8sConfigMap `json:"configMap,omitempty"`
-	Nodes             []CmNode         `json:"nodes,omitempty"`
+	Replicas          int32       `json:"replicas,omitempty"`
+	Image             string      `json:"image,omitempty"`
+	SecretName        string      `json:"secretName,omitempty"`
+	RedirectGroupName string      `json:"redirectGroupName,omitempty"`
+	ProxyGroupName    string      `json:"proxyGroupName,omitempty"`
+	ConfigMap         CmConfigMap `json:"configMap,omitempty"`
+	Nodes             []CmNode    `json:"nodes,omitempty"`
 }
 
 // Gbase8sClusterSpec defines the desired state of Gbase8sCluster
