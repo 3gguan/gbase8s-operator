@@ -40,6 +40,12 @@ type Gbase8sStorage struct {
 	VolumeMode string `json:"volumeMode,omitempty"`
 }
 
+type Failover struct {
+	DetectingCount    int `json:"detectingCount,omitempty"`
+	DetectingInterval int `json:"detectingInterval,omitempty"`
+	Timeout           int `json:"timeout,omitempty"`
+}
+
 type Gbase8sNode struct {
 	Name    string          `json:"name,omitempty"`
 	Storage *Gbase8sStorage `json:"storage,omitempty"`
@@ -54,6 +60,7 @@ type CmNode struct {
 type Gbase8sConfig struct {
 	Replicas   int32            `json:"replicas,omitempty"`
 	Image      string           `json:"image,omitempty"`
+	Failover   Failover         `json:"failover,omitempty"`
 	SecretName string           `json:"secretName,omitempty"`
 	ConfigMap  Gbase8sConfigMap `json:"configMap,omitempty"`
 	Nodes      []Gbase8sNode    `json:"nodes,omitempty"`

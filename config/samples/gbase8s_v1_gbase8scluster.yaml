@@ -9,6 +9,10 @@ spec:
   gbase8s:
     replicas: 3
     image: gbase8s:8.8
+    failover:
+      detectingCount: 5
+      detectingInterval: 2
+      timeout: 5
     secretName: gbase8s-secret
     configMap:
       name: gbase8s-conf

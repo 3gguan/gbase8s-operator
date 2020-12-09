@@ -30,6 +30,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"strings"
 )
 
 var log = logrus.New()
@@ -41,6 +42,7 @@ type Gbase8sClusterReconciler struct {
 	Scheme *runtime.Scheme
 	Event  record.EventRecorder
 	*Gbase8sClusterBuilder
+	ClusterManager *ClusterManager
 }
 
 func (r *Gbase8sClusterReconciler) createPVs(pvs []*corev1.PersistentVolume, ctx context.Context) error {
@@ -131,6 +133,7 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		if errors.IsNotFound(err) {
 			// Object not found, return.  Created objects are automatically garbage collected.
 			// For additional cleanup logic use finalizers.
+			r.ClusterManager.DelCluster(req.Name, req.Namespace)
 			return reconcile.Result{}, nil
 		}
 		return ctrl.Result{}, err
@@ -303,10 +306,45 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	}
 
 	//log.Info("#################start######################")
+	gbase8sPodLabels := map[string]string{
+		GBASE8S_POD_LABEL_KEY: GBASE8S_POD_LABEL_VALUE_PREFIX + gbase8sCluster.Name,
+	}
+	gbase8sPods, err := GetAllPods(gbase8sCluster.Namespace, &gbase8sPodLabels)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		} else {
+			return ctrl.Result{}, err
+		}
+	}
+	_, gDomain, err := GetHostTemplate(gbase8sPods)
+	if err != nil {
+		return ctrl.Result{}, nil
+	}
 
-	err := r.BuildCluster(&gbase8sCluster)
+	var nodeList []*NodeBasicInfo
+	for _, v := range gbase8sPods.Items {
+		tempNode := &NodeBasicInfo{
+			PodName:    v.Name,
+			HostName:   v.Spec.Hostname,
+			Namespace:  v.Namespace,
+			ServerName: strings.Replace(v.Name, "-", "_", -1),
+			Domain:     gDomain,
+		}
+		nodeList = append(nodeList, tempNode)
+	}
+	r.ClusterManager.AddCluster(gbase8sCluster.Name,
+		gbase8sCluster.Namespace,
+		&nodeList,
+		gbase8sCluster.Spec.Gbase8sCfg.Failover.DetectingCount,
+		gbase8sCluster.Spec.Gbase8sCfg.Failover.DetectingInterval,
+		gbase8sCluster.Spec.Gbase8sCfg.Failover.Timeout)
+
+	err = r.BuildCluster(&gbase8sCluster)
 	if err != nil {
 		log.Errorf("Unable to build gbase8s cluster, error: %s", err.Error())
+	} else {
+		r.ClusterManager.UpdateCluster(gbase8sCluster.Name, gbase8sCluster.Namespace)
 	}
 
 	//log.Info("#################end######################")
