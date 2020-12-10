@@ -2,6 +2,7 @@ package controllers
 
 import (
 	gbase8sv1 "Gbase8sCluster/api/v1"
+	"Gbase8sCluster/entity"
 	"Gbase8sCluster/util"
 	"context"
 	"errors"
@@ -45,8 +46,11 @@ type clusterManager struct {
 	//所有节点
 	podList *[]*NodeBasicInfo
 
-	//http client
-	httpClient *util.HttpClient
+	//detecting http client
+	detectingHttpClient *util.HttpClient
+
+	//general http client
+	generalHttpClient *util.HttpClient
 
 	//探测定时器
 	detectingTicker *time.Ticker
@@ -106,7 +110,7 @@ func (c *ClusterManager) procModifyParam(param *clusterManager, queueMsg *CfgQue
 			}
 			if param.detecting.timeout != v.timeout {
 				param.detecting.timeout = v.timeout
-				param.httpClient.SetTimeout(time.Duration(v.timeout))
+				param.detectingHttpClient = util.NewHttpClient().SetTimeout(time.Duration(v.timeout))
 			}
 		} else {
 			log.Error("Modify detecting param failed")
@@ -127,12 +131,42 @@ func getPort(podName string) string {
 	return "3111" + aa[len(aa)-1]
 }
 
+func getStatByHost(host, domain string, param *clusterManager) (*entity.ResponseData, error) {
+	//url := fmt.Sprintf("http://%s.%s:%s/hac/getStatus", host, domain, getPort(host))
+	url := fmt.Sprintf("http://192.168.70.2:%s/hac/getStatus", getPort(host))
+	return param.detectingHttpClient.Get(url)
+}
+
+func execByHost(host, domain, cmd string, param *clusterManager) (string, string, error) {
+	//url := fmt.Sprintf("http://%s.%s:%s/hac/exec", host, domain, getPort(host))
+	url := fmt.Sprintf("http://192.168.70.2:%s/hac/exec", getPort(host))
+	resp, err := param.generalHttpClient.Post(url, map[string]string{
+		"cmd": cmd,
+	})
+
+	var stdout, stderr string
+	if err == nil {
+		if v, ok := resp.Data.(map[string]interface{}); ok {
+			out := v["stdout"]
+			err := v["stderr"]
+			if vo, ok := out.(string); ok {
+				stdout = vo
+			}
+			if eo, ok := err.(string); ok {
+				stderr = eo
+			}
+		}
+	}
+
+	return stdout, stderr, err
+}
+
 func (c *ClusterManager) procFailover(param *clusterManager) {
 	//发送探测请求
 	primaryPod := param.primaryPod
 	if primaryPod != nil {
-		url := fmt.Sprintf("http://%s.%s:%s/hac/getStatus", primaryPod.HostName, primaryPod.Domain, getPort(primaryPod.PodName))
-		if resp, err := param.httpClient.Get(url); err != nil {
+		log.Infof("detecting %s", param.primaryPod.PodName)
+		if resp, err := getStatByHost(primaryPod.HostName, primaryPod.Domain, param); err != nil {
 			if strings.Contains(err.Error(), "timeout") ||
 				strings.Contains(err.Error(), "Timeout") {
 				param.currFailedCount++
@@ -140,6 +174,12 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 		} else {
 			if resp.Code != "0" {
 				param.currFailedCount++
+			} else {
+				if v, ok := resp.Data.(string); ok {
+					if strings.Contains(v, "shared memory not initialized") {
+						param.currFailedCount++
+					}
+				}
 			}
 		}
 
@@ -150,14 +190,15 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 			var nodeList []*NodeInfo
 			for _, v := range *param.podList {
 				if v.PodName != primaryPod.PodName {
-					url := fmt.Sprintf("http://%s.%s:%s/hac/getStatus", v.HostName, v.Domain, getPort(v.PodName))
-					if resp, err := param.httpClient.Get(url); err == nil {
+					if resp, err := getStatByHost(v.HostName, v.Domain, param); err == nil {
 						if resp.Code == "0" {
 							if val, ok := resp.Data.(string); ok {
 								nodeInfo, _ := ParseNodeInfo(v.PodName, v.HostName, v.Domain, val)
 								nodeList = append(nodeList, nodeInfo)
 							}
 						}
+					} else {
+						log.Errorf("err: %s", err.Error())
 					}
 				}
 			}
@@ -173,38 +214,34 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 
 			//切主
 			if secondaryNode != nil {
-				url := fmt.Sprintf("http://%s.%s:%s/hac/exec", secondaryNode.HostName, secondaryNode.Domain, getPort(secondaryNode.PodName))
 				cmdBuilder := strings.Builder{}
 				for _, v := range *param.podList {
 					if v.PodName != secondaryNode.PodName {
 						cmdBuilder.WriteString(" && onmode -d add RSS ")
-						cmdBuilder.WriteString(primaryPod.ServerName)
+						cmdBuilder.WriteString(v.ServerName)
 					}
 				}
 
 				if cmdBuilder.Len() != 0 {
-					body := map[string]interface{}{
-						"cmd": "source /env.sh && onmode -d standard" + cmdBuilder.String(),
-					}
-					resp, err := param.httpClient.Post(url, body)
+					log.Infof("cluster %s %s failover to %s", param.clusterName, param.clusterNamespace, secondaryNode.PodName)
+					_, stderr, err := execByHost(secondaryNode.HostName, secondaryNode.Domain, "source /env.sh && onmode -d standard"+cmdBuilder.String(), param)
 					if err != nil {
 						log.Errorf("failover failed, err: %s", err)
 					} else {
-						if resp.Code != "0" {
-							log.Errorf("failover failed, code: %s, message: %s", resp.Code, resp.Message)
+						param.currFailedCount = 0
+						if stderr != "" {
+							log.Errorf("failover failed, message: %s", stderr)
 						} else {
 							for _, v := range nodeList {
-								if v.PodName != secondaryNode.PodName && v.ServerType == GBASE8S_ROLE_RSS {
-									url = fmt.Sprintf("http://%s.%s:%s/hac/exec", secondaryNode.HostName, secondaryNode.Domain, getPort(v.PodName))
-									body = map[string]interface{}{
-										"cmd": "source /env.sh && onmode -ky && oninit -PHY && onmode -d RSS " + secondaryNode.ServerName,
-									}
-									resp, err := param.httpClient.Post(url, body)
+								if (v.PodName != secondaryNode.PodName) && (v.ServerType == GBASE8S_ROLE_RSS) {
+									_, stderr1, err := execByHost(v.HostName, v.Domain,
+										"source /env.sh && echo \"0\" > check.conf && onmode -ky && oninit -PHY && onmode -d RSS "+secondaryNode.ServerName+" && echo \"1\" > check.conf",
+										param)
 									if err != nil {
 										log.Errorf("failover failed, err: %s", err)
 									} else {
-										if resp.Code != "0" {
-											log.Errorf("failover failed, code: %s, message: %s", resp.Code, resp.Message)
+										if stderr != "" {
+											log.Errorf("failover failed, message: %s", stderr1)
 										}
 									}
 								}
@@ -532,7 +569,7 @@ func (c *ClusterManager) startDetecting(param *clusterManager) error {
 
 	var pNode *NodeInfo
 	for _, v := range *nodes {
-		if v.ServerName == GBASE8S_ROLE_PRIMARY {
+		if v.ServerType == GBASE8S_ROLE_PRIMARY {
 			pNode = &v
 			break
 		}
@@ -571,11 +608,11 @@ func (c *ClusterManager) clusterThread(param *clusterManager) {
 			if err := c.procUpdateGbase8sCluster(param); err != nil {
 				if err.Error() != "wait" {
 					param.updateGbase8sClusterTicker.Stop()
-					log.Error("process update gbase8s cluster failed, err: %s", err.Error())
+					log.Errorf("process update gbase8s cluster failed, err: %s", err.Error())
 				}
 			} else {
 				if err := c.startDetecting(param); err != nil {
-					log.Error("start detecting %s %s failed, err: %s", param.clusterName, param.clusterNamespace, err.Error())
+					log.Errorf("start detecting %s %s failed, err: %s", param.clusterName, param.clusterNamespace, err.Error())
 				}
 				param.updateGbase8sClusterTicker.Stop()
 				param.updateCmClusterTicker.Reset(2 * time.Second)
@@ -584,7 +621,7 @@ func (c *ClusterManager) clusterThread(param *clusterManager) {
 			if err := c.procUpdateCmCluster(param); err != nil {
 				if err.Error() != "wait" {
 					param.updateCmClusterTicker.Stop()
-					log.Error("process update cm cluster failed, err: %s", err.Error())
+					log.Errorf("process update cm cluster failed, err: %s", err.Error())
 				}
 			} else {
 				param.updateCmClusterTicker.Stop()
@@ -655,8 +692,9 @@ func (c *ClusterManager) AddCluster(clusterName, clusterNamespace string, podLis
 			currFailedCount:            0,
 			primaryPod:                 nil,
 			podList:                    podList,
-			httpClient:                 util.NewHttpClient().SetTimeout(time.Duration(timeout)),
+			detectingHttpClient:        util.NewHttpClient().SetTimeout(time.Duration(timeout)),
 			detectingTicker:            time.NewTicker(time.Duration(detectingInterval) * time.Second),
+			generalHttpClient:          util.NewHttpClient().SetTimeout(10 * 60),
 			cfgQueue:                   make(chan *CfgQueueMsg),
 			updateGbase8sClusterTicker: time.NewTicker(2 * time.Second),
 			updateCmClusterTicker:      time.NewTicker(2 * time.Second),

@@ -69,6 +69,7 @@ func (r *Gbase8sClusterBuilder) GenerateTrustString(podNum int, host, domain str
 		hostfileStr.WriteString(tmpStr + "." + domain)
 		hostfileStr.WriteString(" gbasedbt\n")
 	}
+	hostfileStr.WriteString("+ gbasedbt\n")
 
 	return hostfileStr.String()
 }

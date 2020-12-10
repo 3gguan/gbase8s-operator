@@ -64,6 +64,11 @@ func ParseNodeInfo(podName, hostname, domain, nodeInfoStr string) (*NodeInfo, er
 					nodeInfo.SubStatus[len(nodeInfo.SubStatus)-1].Connected = true
 				}
 			}
+		} else if strings.Contains(v, "Source server name") {
+			list2 := strings.Split(v, ":")
+			if len(list2) == 2 {
+				nodeInfo.SourceServerName = strings.TrimSpace(list2[1])
+			}
 		}
 	}
 

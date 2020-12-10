@@ -2,9 +2,10 @@ package util
 
 import (
 	"Gbase8sCluster/entity"
-	"encoding/json"
+	//"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/json-iterator/go"
 	"github.com/kirinlabs/HttpRequest"
 	"time"
 )
@@ -39,7 +40,7 @@ func (h *HttpClient) Get(url string) (*entity.ResponseData, error) {
 			return nil, err
 		} else {
 			var reponseData entity.ResponseData
-			if err := json.Unmarshal(byteRet, &reponseData); err != nil {
+			if err := jsoniter.Unmarshal(byteRet, &reponseData); err != nil {
 				return nil, err
 			}
 			return &reponseData, nil
@@ -47,8 +48,18 @@ func (h *HttpClient) Get(url string) (*entity.ResponseData, error) {
 	}
 }
 
-func (h *HttpClient) Post(url string, data ...interface{}) (*entity.ResponseData, error) {
-	if resp, err := h.httpReq.Post(url, data); err != nil {
+func (h *HttpClient) Post(url string, data interface{}) (*entity.ResponseData, error) {
+	body, err := jsoniter.Config{EscapeHTML: false, ValidateJsonRawMessage: true}.Froze().Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	//ssss := "{\"cmd\":\"source /env.sh && onstat -g rss\"}"
+	//log.Info(ssss)
+	//log.Info(string(body))
+	//if v, ok := data.(string); ok {
+	//	log.Info(v)
+	//}
+	if resp, err := h.httpReq.Post(url, body); err != nil {
 		return nil, err
 	} else {
 		if resp.StatusCode() != 200 {
@@ -58,7 +69,7 @@ func (h *HttpClient) Post(url string, data ...interface{}) (*entity.ResponseData
 			return nil, err
 		} else {
 			var reponseData entity.ResponseData
-			if err := json.Unmarshal(byteRet, &reponseData); err != nil {
+			if err := jsoniter.Unmarshal(byteRet, &reponseData); err != nil {
 				return nil, err
 			}
 			return &reponseData, nil
