@@ -478,7 +478,7 @@ HETERO_COMMIT 0
 #                positive integral multiple of TAPEBLK.
 ###################################################################
 
-TAPEDEV /dev/tapedev
+TAPEDEV /dev/null
 TAPEBLK 32
 TAPESIZE 0
 
@@ -493,7 +493,7 @@ TAPESIZE 0
 #                positive integral multiple of LTAPEBLK.
 ###################################################################
 
-LTAPEDEV /dev/tapedev
+LTAPEDEV /dev/null
 LTAPEBLK 32
 LTAPESIZE 0
 
