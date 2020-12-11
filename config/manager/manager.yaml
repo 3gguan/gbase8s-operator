@@ -3,13 +3,13 @@ kind: Namespace
 metadata:
   labels:
     control-plane: controller-manager
-  name: system
+  name: gbase8s-operator
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: controller-manager
-  namespace: system
+  namespace: gbase8s-operator
   labels:
     control-plane: controller-manager
 spec:
@@ -27,7 +27,7 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        image: controller:latest
+        image: gbase8s-cluster-controller:latest
         name: manager
         imagePullPolicy: IfNotPresent
         resources:
