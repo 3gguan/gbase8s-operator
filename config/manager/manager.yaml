@@ -46,4 +46,12 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
+        volumeMounts:
+          - name: conf
+            mountPath: /root/.kube
       terminationGracePeriodSeconds: 10
+      volumes:
+        - name: conf
+          configMap:
+            name: gbase8s-operator-conf
+
