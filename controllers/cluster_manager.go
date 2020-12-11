@@ -191,7 +191,7 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 
 		//进行故障转移
 		if param.currFailedCount >= param.detecting.detectingCount {
-
+			log.Infof("cluster %s %s failover start", param.clusterName, param.clusterNamespace)
 			//获取secondary节点信息
 			var nodeList []*NodeInfo
 			for _, v := range *param.podList {
@@ -236,31 +236,54 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 					} else {
 						param.currFailedCount = 0
 						param.primaryPod = &secondaryNode.NodeBasicInfo
-						param.activeUpdateCluster <- 1
+
+						//激活更新集群
+						select {
+						case param.activeUpdateCluster <- 1:
+						default:
+						}
+
 						if stderr != "" {
-							log.Errorf("failover failed, message: %s", stderr)
+							log.Errorf("cluster %s %s failover failed, message: %s", param.clusterName, param.clusterNamespace, stderr)
 						} else {
 							for _, v := range nodeList {
 								if (v.PodName != secondaryNode.PodName) && (v.ServerType == GBASE8S_ROLE_RSS) {
-									_, stderr1, err := execByHost(v.HostName, v.Domain,
-										"source /env.sh && echo \"0\" > check.conf && onmode -ky && oninit -PHY && onmode -d RSS "+secondaryNode.ServerName,
-										param)
-									_, _, _ = execByHost(v.HostName, v.Domain, "echo \"1\" > /check.conf", param)
+									rssCmd := "source /env.sh && curl -o tape http://" +
+										secondaryNode.PodName +
+										"." +
+										secondaryNode.Domain +
+										":8000/hac/getTape && sh /recover.sh tape && onmode -d RSS " +
+										secondaryNode.ServerName
+									log.Infof("secondary: %s, add to cluster", v.PodName)
+									_, stderr, err := execByHost(v.HostName, v.Domain, rssCmd, param)
 									if err != nil {
-										log.Errorf("failover failed, err: %s", err)
-									} else {
-										if stderr != "" {
-											log.Errorf("failover failed, message: %s", stderr1)
-										}
+										log.Errorf("secondary %s add to cluster failed, err: %s stderr: %s", v.PodName, err.Error(), stderr)
 									}
 								}
 							}
+							//for _, v := range nodeList {
+							//	if (v.PodName != secondaryNode.PodName) && (v.ServerType == GBASE8S_ROLE_RSS) {
+							//		_, stderr1, err := execByHost(v.HostName, v.Domain,
+							//			"source /env.sh && echo \"0\" > check.conf && onmode -ky && oninit -PHY && onmode -d RSS "+secondaryNode.ServerName,
+							//			param)
+							//		_, _, _ = execByHost(v.HostName, v.Domain, "echo \"1\" > /check.conf", param)
+							//		if err != nil {
+							//			log.Errorf("failover failed, err: %s", err)
+							//		} else {
+							//			if stderr != "" {
+							//				log.Errorf("failover failed, message: %s", stderr1)
+							//			}
+							//		}
+							//	}
+							//}
 						}
 					}
 				}
 			} else {
 				log.Errorf("cannot find failover node, cluster: %s, namespace: %s", param.clusterName, param.clusterNamespace)
 			}
+
+			log.Infof("cluster %s %s failover end", param.clusterName, param.clusterNamespace)
 		}
 	}
 
@@ -283,7 +306,16 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 1废主 1主 2备。 ---已经切主，废主变备
 4废主。 ---不知所措
 */
-func findRealGbase8sPrimary(nodes *[]NodeInfo) (*NodeInfo, error) {
+func findRealGbase8sPrimary(nodes *[]NodeInfo, param *clusterManager) (*NodeInfo, error) {
+	if param.primaryPod != nil {
+		for i := 0; i < len(*nodes); i++ {
+			v := &(*nodes)[i]
+			if param.primaryPod.PodName == v.PodName {
+				return v, nil
+			}
+		}
+	}
+
 	var primaryNode, secondaryNode, standardNode []*NodeInfo
 	for i := 0; i < len(*nodes); i++ {
 		v := &(*nodes)[i]
@@ -394,18 +426,6 @@ func (c *ClusterManager) procUpdateGbase8sCluster(param *clusterManager) error {
 		return err
 	}
 
-	//gPodLabels := map[string]string{
-	//	GBASE8S_POD_LABEL_KEY: GBASE8S_POD_LABEL_VALUE_PREFIX + gbase8sCluster.Name,
-	//}
-	//gPods := &corev1.PodList{}
-	//opts := &client.ListOptions{
-	//	Namespace:     param.clusterNamespace,
-	//	LabelSelector: labels.SelectorFromSet(gPodLabels),
-	//}
-	//if err := c.List(ctx, gPods, opts); err != nil {
-	//	return errors.New("get gbase8s pods failed, err: " + err.Error())
-	//}
-
 	if gbase8sExpectReplicas != int32(len(gPods.Items)) {
 		return errors.New("wait")
 	}
@@ -447,7 +467,7 @@ func (c *ClusterManager) procUpdateGbase8sCluster(param *clusterManager) error {
 		return nil
 	}
 
-	p, err := findRealGbase8sPrimary(nodes)
+	p, err := findRealGbase8sPrimary(nodes, param)
 	if err != nil {
 		return err
 	}
