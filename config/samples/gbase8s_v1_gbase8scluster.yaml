@@ -19,7 +19,7 @@ spec:
       onconfigKey: onconfig.ol_gbasedbt_1
       allowedKey: allowed.surrogates
     nodes:
-      - name: node1
+      - name: master
         storage:
           path: /local/storage1
           size: 2Gi
