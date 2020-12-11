@@ -25,6 +25,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager 
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 #FROM gcr.io/distroless/static:nonroot
 FROM golang:1.15.5
+ENV GOPROXY https://goproxy.cn
 WORKDIR /
 COPY --from=builder /workspace/manager .
 #USER nonroot:nonroot
