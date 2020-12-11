@@ -1,9 +1,8 @@
 module Gbase8sCluster
 
-go 1.13
+go 1.15
 
 require (
-	github.com/buger/jsonparser v1.0.0
 	github.com/json-iterator/go v1.1.8
 	github.com/kirinlabs/HttpRequest v1.1.1
 	github.com/onsi/ginkgo v1.11.0

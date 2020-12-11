@@ -132,14 +132,14 @@ func getPort(podName string) string {
 }
 
 func getStatByHost(host, domain string, param *clusterManager) (*entity.ResponseData, error) {
-	//url := fmt.Sprintf("http://%s.%s:%s/hac/getStatus", host, domain, getPort(host))
-	url := fmt.Sprintf("http://192.168.70.2:%s/hac/getStatus", getPort(host))
+	url := fmt.Sprintf("http://%s.%s:%s/hac/getStatus", host, domain, GBASE8S_CONFIG_PORT)
+	//url := fmt.Sprintf("http://192.168.70.2:%s/hac/getStatus", getPort(host))
 	return param.detectingHttpClient.Get(url)
 }
 
 func execByHost(host, domain, cmd string, param *clusterManager) (string, string, error) {
-	//url := fmt.Sprintf("http://%s.%s:%s/hac/exec", host, domain, getPort(host))
-	url := fmt.Sprintf("http://192.168.70.2:%s/hac/exec", getPort(host))
+	url := fmt.Sprintf("http://%s.%s:%s/hac/exec", host, domain, GBASE8S_CONFIG_PORT)
+	//url := fmt.Sprintf("http://192.168.70.2:%s/hac/exec", getPort(host))
 	resp, err := param.generalHttpClient.Post(url, map[string]string{
 		"cmd": cmd,
 	})
