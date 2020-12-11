@@ -285,16 +285,17 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 */
 func findRealGbase8sPrimary(nodes *[]NodeInfo) (*NodeInfo, error) {
 	var primaryNode, secondaryNode, standardNode []*NodeInfo
-	for _, v := range *nodes {
+	for i := 0; i < len(*nodes); i++ {
+		v := &(*nodes)[i]
 		if v.ServerType == GBASE8S_ROLE_PRIMARY {
 			if v.Connected {
-				return &v, nil
+				return v, nil
 			}
-			primaryNode = append(primaryNode, &v)
+			primaryNode = append(primaryNode, v)
 		} else if v.ServerType == GBASE8S_ROLE_RSS {
-			secondaryNode = append(secondaryNode, &v)
+			secondaryNode = append(secondaryNode, v)
 		} else {
-			standardNode = append(standardNode, &v)
+			standardNode = append(standardNode, v)
 		}
 	}
 
@@ -479,7 +480,7 @@ func (c *ClusterManager) procUpdateGbase8sCluster(param *clusterManager) error {
 
 	//辅节点加入集群
 	for _, v := range *nodes {
-		if v.PodName != p.PodName && !v.Connected {
+		if (v.PodName != p.PodName) && (!v.Connected) && (v.SourceServerName != p.ServerName) {
 			rssCmd := []string{"bash", "-c", "source /env.sh && curl -o tape http://" +
 				p.PodName +
 				"." +

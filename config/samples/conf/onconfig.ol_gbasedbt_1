@@ -1275,7 +1275,7 @@ CDR_MEM 0
 #                                 aware of the transactions's changes.
 ###################################################################
 
-DRAUTO                  3
+DRAUTO                  0
 DRINTERVAL              0
 HDR_TXN_SCOPE           NEAR_SYNC
 DRTIMEOUT               30
