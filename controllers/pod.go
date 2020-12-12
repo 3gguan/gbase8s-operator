@@ -41,10 +41,14 @@ func GetHostTemplate(pods *corev1.PodList) (string, string, error) {
 
 	//获取hostname和dnsdomainname
 	hostnameStr := ""
+	errStr := ""
 	for _, v := range pods.Items {
 		if len(v.Status.ContainerStatuses) != 0 {
 			if v.Status.ContainerStatuses[0].State.Running != nil {
-				stdout, _, _ := pod.execClient.Exec(getHostCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
+				stdout, _, err := pod.execClient.Exec(getHostCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
+				if err != nil {
+					errStr = err.Error()
+				}
 				if stdout != "" {
 					hostnameStr = stdout
 					break
@@ -54,6 +58,9 @@ func GetHostTemplate(pods *corev1.PodList) (string, string, error) {
 	}
 
 	if hostnameStr == "" {
+		if errStr != "" {
+			return "", "", errors.New("get host template failed, err: " + errStr)
+		}
 		return "", "", errors.New("get host template failed")
 	}
 

@@ -19,7 +19,6 @@ package controllers
 import (
 	gbase8sv1 "Gbase8sCluster/api/v1"
 	"context"
-	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -32,8 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strings"
 )
-
-var log = logrus.New()
 
 // Gbase8sClusterReconciler reconciles a Gbase8sCluster object
 type Gbase8sClusterReconciler struct {

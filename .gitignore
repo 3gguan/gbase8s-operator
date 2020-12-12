@@ -19,6 +19,7 @@ bin
 
 # editor and IDE paraphernalia
 .idea
+.logs
 *.swp
 *.swo
 *~

@@ -2,7 +2,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: gbase8scluster-editor-role
+  name: edit-role
 rules:
 - apiGroups:
   - gbase8s.gbase.cn
@@ -22,3 +22,52 @@ rules:
   - gbase8sclusters/status
   verbs:
   - get
+  - patch
+  - update
+
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - events
+  - jobs
+  - persistentvolumeclaims
+  - persistentvolumes
+  - pods
+  - secrets
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+
+- apiGroups:
+  - ""
+  resources:
+  - pods/status
+  - pods/exec
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

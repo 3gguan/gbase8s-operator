@@ -3,13 +3,13 @@ kind: Namespace
 metadata:
   labels:
     control-plane: controller-manager
-  name: gbase8s-operator
+  name: system
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: controller-manager
-  namespace: gbase8s-operator
+  namespace: system
   labels:
     control-plane: controller-manager
 spec:
@@ -36,22 +36,7 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        image: gbase8s-cluster-controller:latest
+        image: controller:latest
         name: manager
         imagePullPolicy: IfNotPresent
-        resources:
-          limits:
-            cpu: 100m
-            memory: 30Mi
-          requests:
-            cpu: 100m
-            memory: 20Mi
-        volumeMounts:
-          - name: conf
-            mountPath: /root/.kube
       terminationGracePeriodSeconds: 10
-      volumes:
-        - name: conf
-          configMap:
-            name: gbase8s-operator-conf
-

@@ -30,4 +30,6 @@ WORKDIR /
 COPY --from=builder /workspace/manager .
 #USER nonroot:nonroot
 
+VOLUME ["/logs"]
+
 ENTRYPOINT ["/manager"]
