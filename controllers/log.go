@@ -19,7 +19,7 @@ func init() {
 		logFile+"-%Y-%m-%d-%H:%M",
 		rotatelogs.WithLinkName(logFile),
 		rotatelogs.WithMaxAge(time.Duration(7)*time.Hour*24),
-		rotatelogs.WithRotationTime(time.Duration(1)*time.Second*24),
+		rotatelogs.WithRotationTime(time.Duration(1)*time.Hour*24),
 	)
 	writers := []io.Writer{writer, os.Stdout}
 	foWriter := io.MultiWriter(writers...)
