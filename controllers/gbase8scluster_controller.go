@@ -113,6 +113,9 @@ func (r *Gbase8sClusterReconciler) createPVCs(pvcs []*corev1.PersistentVolumeCla
 
 // +kubebuilder:rbac:groups=gbase8s.gbase.cn,resources=gbase8sclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=gbase8s.gbase.cn,resources=gbase8sclusters/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=create;delete;get;list;patch;update;watch
+// +kubebuilder:rbac:groups=core,resources=configmaps;events;jobs;persistentvolumeclaims;persistentvolumes;pods;secrets;services,verbs=create;delete;get;list;patch;update;watch
+// +kubebuilder:rbac:groups=core,resources=pods/status;pods/exec,verbs=create;delete;get;list;patch;update;watch
 
 func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
