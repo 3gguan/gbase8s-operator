@@ -181,6 +181,16 @@ func NewGbase8sStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulse
 			})
 	}
 
+	for _, v := range cluster.Spec.Gbase8sCfg.Env {
+		createStatefulset.Spec.Template.Spec.Containers[0].Env = append(createStatefulset.Spec.Template.Spec.Containers[0].Env, v)
+	}
+
+	for k, v := range cluster.Spec.Gbase8sCfg.Labels {
+		if _, ok := createStatefulset.Spec.Template.Labels[k]; !ok {
+			createStatefulset.Spec.Template.Labels[k] = v
+		}
+	}
+
 	gsfs.sfs = &createStatefulset
 
 	return &gsfs

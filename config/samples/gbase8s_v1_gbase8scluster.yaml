@@ -9,6 +9,14 @@ spec:
   gbase8s:
     replicas: 3
     image: gbase8s:8.8
+    env:
+      - name: DB_LOCALE
+        value: zh_cn.utf8
+      - name: CLIENT_LOCALE
+        value: zh_cn.utf8
+    labels:
+      aaa: bbb
+      ccc: ddd
     failover:
       detectingCount: 5
       detectingInterval: 2
@@ -49,9 +57,17 @@ spec:
   connectManager:
     replicas: 1
     image: cm:8.8
+    env:
+      - name: DB_LOCALE
+        value: zh_cn.utf8
+      - name: CLIENT_LOCALE
+        value: zh_cn.utf8
+    labels:
+      aaa: bbb
+      ccc: ddd
     secretName: gbase8s-secret
-    redirectGroupName: cmredirect
-    proxyGroupName: cmproxy
+    redirectTemplateName: cmredirect
+    proxyTemplateName: cmproxy
     configMap:
       name: gbase8s-conf
       configKey: cfg.cm

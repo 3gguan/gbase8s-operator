@@ -143,6 +143,14 @@ func (r *Gbase8sClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		cmExpectReplicas = gbase8sCluster.Spec.CmCfg.Replicas
 	}
 
+	if len(gbase8sCluster.Spec.CmCfg.ProxyGroupName) == 0 {
+		gbase8sCluster.Spec.CmCfg.ProxyGroupName = "proxy"
+	}
+
+	if len(gbase8sCluster.Spec.CmCfg.RedirectGroupName) == 0 {
+		gbase8sCluster.Spec.CmCfg.RedirectGroupName = "redirect"
+	}
+
 	//创建pv,pvc
 	nodes := gbase8sCluster.Spec.Gbase8sCfg.Nodes
 	if nodes != nil && len(nodes) != 0 {

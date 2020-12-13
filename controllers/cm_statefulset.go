@@ -75,6 +75,14 @@ func NewCmStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulset {
 									Name:  "AUTO_SERVER_NAME",
 									Value: "1",
 								},
+								{
+									Name:  "REDIRECT_CM_NAME",
+									Value: cluster.Spec.CmCfg.RedirectGroupName,
+								},
+								{
+									Name:  "PROXY_CM_NAME",
+									Value: cluster.Spec.CmCfg.ProxyGroupName,
+								},
 							},
 						},
 					},
@@ -159,6 +167,16 @@ func NewCmStatefulset(cluster *gbase8sv1.Gbase8sCluster) *gbase8sStatefulset {
 					},
 				},
 			})
+	}
+
+	for _, v := range cluster.Spec.CmCfg.Env {
+		createStatefulset.Spec.Template.Spec.Containers[0].Env = append(createStatefulset.Spec.Template.Spec.Containers[0].Env, v)
+	}
+
+	for k, v := range cluster.Spec.CmCfg.Labels {
+		if _, ok := createStatefulset.Spec.Template.Labels[k]; !ok {
+			createStatefulset.Spec.Template.Labels[k] = v
+		}
 	}
 
 	gsfs.sfs = &createStatefulset

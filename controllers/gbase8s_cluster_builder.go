@@ -135,18 +135,8 @@ func (r *Gbase8sClusterBuilder) GenerateCmSqlhostString(
 	cmHost, cmDomain string,
 	redirectGroupName, proxyGroupName string) string {
 
-	var rName, pName string
-	if len(redirectGroupName) != 0 {
-		rName = redirectGroupName
-	} else {
-		rName = CM_REDIRECT_GROUP_DEFAULT_NAME
-	}
-
-	if len(proxyGroupName) != 0 {
-		pName = proxyGroupName
-	} else {
-		pName = CM_PROXY_GROUP_DEFAULT_NAME
-	}
+	rName := CM_REDIRECT_GROUP_DEFAULT_NAME
+	pName := CM_PROXY_GROUP_DEFAULT_NAME
 
 	//gbase8s sqlhost
 	var sqlhostStr strings.Builder
@@ -163,7 +153,7 @@ func (r *Gbase8sClusterBuilder) GenerateCmSqlhostString(
 
 	sqlhostStr.WriteString(rName)
 	sqlhostStr.WriteString(" group - - c=1\n")
-	cmRNameTemplate := "redirect_" + strings.Replace(cmHost, "-", "_", -1)
+	cmRNameTemplate := redirectGroupName
 	for i := 0; i < cmPodNum; i++ {
 		serverName := fmt.Sprintf("%s_%d", cmRNameTemplate, i)
 		hostName := fmt.Sprintf("%s-%d.%s", cmHost, i, cmDomain)
@@ -175,7 +165,7 @@ func (r *Gbase8sClusterBuilder) GenerateCmSqlhostString(
 
 	sqlhostStr.WriteString(pName)
 	sqlhostStr.WriteString(" group - - c=1\n")
-	cmPNameTemplate := "proxy_" + strings.Replace(cmHost, "-", "_", -1)
+	cmPNameTemplate := proxyGroupName
 	for i := 0; i < cmPodNum; i++ {
 		serverName := fmt.Sprintf("%s_%d", cmPNameTemplate, i)
 		hostName := fmt.Sprintf("%s-%d.%s", cmHost, i, cmDomain)

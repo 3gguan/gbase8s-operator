@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -58,22 +59,26 @@ type CmNode struct {
 }
 
 type Gbase8sConfig struct {
-	Replicas   int32            `json:"replicas,omitempty"`
-	Image      string           `json:"image,omitempty"`
-	Failover   Failover         `json:"failover,omitempty"`
-	SecretName string           `json:"secretName,omitempty"`
-	ConfigMap  Gbase8sConfigMap `json:"configMap,omitempty"`
-	Nodes      []Gbase8sNode    `json:"nodes,omitempty"`
+	Replicas   int32             `json:"replicas,omitempty"`
+	Image      string            `json:"image,omitempty"`
+	Env        []corev1.EnvVar   `json:"env,omitempty"`
+	Labels     map[string]string `json:"labels,omitempty"`
+	Failover   Failover          `json:"failover,omitempty"`
+	SecretName string            `json:"secretName,omitempty"`
+	ConfigMap  Gbase8sConfigMap  `json:"configMap,omitempty"`
+	Nodes      []Gbase8sNode     `json:"nodes,omitempty"`
 }
 
 type CmConfig struct {
-	Replicas          int32       `json:"replicas,omitempty"`
-	Image             string      `json:"image,omitempty"`
-	SecretName        string      `json:"secretName,omitempty"`
-	RedirectGroupName string      `json:"redirectGroupName,omitempty"`
-	ProxyGroupName    string      `json:"proxyGroupName,omitempty"`
-	ConfigMap         CmConfigMap `json:"configMap,omitempty"`
-	Nodes             []CmNode    `json:"nodes,omitempty"`
+	Replicas          int32             `json:"replicas,omitempty"`
+	Image             string            `json:"image,omitempty"`
+	Env               []corev1.EnvVar   `json:"env,omitempty"`
+	Labels            map[string]string `json:"labels,omitempty"`
+	SecretName        string            `json:"secretName,omitempty"`
+	RedirectGroupName string            `json:"redirectTemplateName,omitempty"`
+	ProxyGroupName    string            `json:"proxyTemplateName,omitempty"`
+	ConfigMap         CmConfigMap       `json:"configMap,omitempty"`
+	Nodes             []CmNode          `json:"nodes,omitempty"`
 }
 
 // Gbase8sClusterSpec defines the desired state of Gbase8sCluster
