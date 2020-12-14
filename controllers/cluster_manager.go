@@ -388,7 +388,7 @@ func (c *ClusterManager) getNodesRssStatus(pods *corev1.PodList, domain string) 
 		stdout, stderr, err := c.execClient.Exec(onstatCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
 		if err != nil {
 			if !strings.Contains(stderr, "shared memory not initialized") {
-				return nil, errors.New("get rss status failed, error: " + err.Error() + " " + stderr)
+				return nil, errors.New(fmt.Sprintf("get %s %s rss status failed, error: %s %s", v.Name, v.Namespace, err.Error(), stderr))
 			}
 		}
 
@@ -447,7 +447,8 @@ func (c *ClusterManager) procUpdateGbase8sCluster(param *clusterManager) error {
 	//获取所有容器的rss状态
 	nodes, err := c.getNodesRssStatus(gPods, (*param.podList)[0].Domain)
 	if err != nil {
-		return err
+		log.Errorf("update gbase8s cluster failed, %s", err.Error())
+		return errors.New("wait")
 	}
 
 	needWait := false
