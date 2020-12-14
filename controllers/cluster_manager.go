@@ -399,6 +399,27 @@ func (c *ClusterManager) getNodesRssStatus(pods *corev1.PodList, domain string) 
 	return &nodes, nil
 }
 
+func (c *ClusterManager) isAllNodesServiceRunning(pods *corev1.PodList) bool {
+	isAllRunning := true
+	isRunningCmd := []string{"bash", "-c", "ps -ef | grep runserver | grep -v grep | wc -l"}
+	for _, v := range pods.Items {
+		stdout, _, err := c.execClient.Exec(isRunningCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
+		if err != nil {
+			log.Infof("pod %s %s is not running, err: %s", v.Name, v.Namespace, err.Error())
+			isAllRunning = false
+			break
+		} else {
+			if stdout != "2\n" {
+				log.Infof("pod %s %s is not running", v.Name, v.Namespace)
+				isAllRunning = false
+				break
+			}
+		}
+	}
+
+	return isAllRunning
+}
+
 func (c *ClusterManager) procUpdateGbase8sCluster(param *clusterManager) error {
 	log.Infof("process update gbase8s cluster %s %s", param.clusterName, param.clusterNamespace)
 
@@ -441,6 +462,11 @@ func (c *ClusterManager) procUpdateGbase8sCluster(param *clusterManager) error {
 		}
 	}
 	if flag == 0 {
+		return errors.New("wait")
+	}
+
+	//判断容器内服务是否已经启动，没启动就等待
+	if !c.isAllNodesServiceRunning(gPods) {
 		return errors.New("wait")
 	}
 
