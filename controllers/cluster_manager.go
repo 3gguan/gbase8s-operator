@@ -2,7 +2,6 @@ package controllers
 
 import (
 	gbase8sv1 "Gbase8sCluster/api/v1"
-	"Gbase8sCluster/entity"
 	"Gbase8sCluster/util"
 	"context"
 	"errors"
@@ -40,8 +39,11 @@ type clusterManager struct {
 	//当前探测失败次数
 	currFailedCount int
 
+	//探测标志
+	detectingFlag bool
+
 	//探测主节点
-	primaryPod *NodeBasicInfo
+	primaryPod *NodeInfo
 
 	//所有节点
 	podList *[]*NodeBasicInfo
@@ -91,12 +93,12 @@ func InitClusterManager(client client.Client, execClient *util.ExecInPod) *Clust
 
 func (c *ClusterManager) procModifyParam(param *clusterManager, queueMsg *CfgQueueMsg) {
 	switch queueMsg.MsgType {
-	case FAILOVER_MSGTYPE_PRIMARYPOD:
-		if v, ok := queueMsg.Data.(*NodeBasicInfo); ok {
-			param.primaryPod = v
-		} else {
-			log.Error("Modify primary pod failed")
-		}
+	//case FAILOVER_MSGTYPE_PRIMARYPOD:
+	//	if v, ok := queueMsg.Data.(*NodeBasicInfo); ok {
+	//		param.primaryPod = v
+	//	} else {
+	//		log.Error("Modify primary pod failed")
+	//	}
 	case FAILOVER_MSGTYPE_DETECTING:
 		if v, ok := queueMsg.Data.(*detecting); ok {
 			if param.detecting.detectingCount != v.detectingCount {
@@ -131,10 +133,23 @@ func getPort(podName string) string {
 	return "3111" + aa[len(aa)-1]
 }
 
-func getStatByHost(host, domain string, param *clusterManager) (*entity.ResponseData, error) {
+func getStatByHost(host, domain string, param *clusterManager) (string, error) {
 	url := fmt.Sprintf("http://%s.%s:%s/hac/getStatus", host, domain, GBASE8S_CONFIG_PORT)
 	//url := fmt.Sprintf("http://192.168.70.2:%s/hac/getStatus", getPort(host))
-	return param.detectingHttpClient.Get(url)
+	resp, err := param.detectingHttpClient.Get(url)
+	if err != nil {
+		return "", errors.New(fmt.Sprintf("get status by host failed, err: %s", err.Error()))
+	}
+
+	if resp.Code != "0" {
+		return "", errors.New(fmt.Sprintf("get status by host failed, resp code: %s, message: %s", resp.Code, resp.Message))
+	}
+
+	if v, ok := resp.Data.(string); ok {
+		return v, nil
+	} else {
+		return "", errors.New("get status by host failed, response data type error")
+	}
 }
 
 func execByHost(host, domain, cmd string, param *clusterManager) (string, string, error) {
@@ -162,69 +177,66 @@ func execByHost(host, domain, cmd string, param *clusterManager) (string, string
 }
 
 func (c *ClusterManager) procFailover(param *clusterManager) {
-	//发送探测请求
+	if !param.detectingFlag {
+		return
+	}
 	primaryPod := param.primaryPod
-	if primaryPod != nil {
-		log.Infof("detecting %s", param.primaryPod.PodName)
-		detectingFailed := false
-		if resp, err := getStatByHost(primaryPod.HostName, primaryPod.Domain, param); err != nil {
-			if strings.Contains(err.Error(), "timeout") ||
-				strings.Contains(err.Error(), "Timeout") {
-				detectingFailed = true
-			}
-		} else {
-			if resp.Code != "0" {
-				detectingFailed = true
-			} else {
-				if v, ok := resp.Data.(string); ok {
-					if strings.Contains(v, "shared memory not initialized") {
-						detectingFailed = true
-					}
+	if primaryPod == nil {
+		return
+	}
+
+	log.Infof("detecting %s", param.primaryPod.PodName)
+
+	//发送探测请求
+	detectingFailed := false
+	if resp, err := getStatByHost(primaryPod.HostName, primaryPod.Domain, param); err != nil {
+		detectingFailed = true
+	} else {
+		if strings.Contains(resp, "shared memory not initialized") {
+			detectingFailed = true
+		}
+	}
+	if detectingFailed {
+		param.currFailedCount++
+	} else {
+		param.currFailedCount = 0
+	}
+
+	//进行故障转移
+	if param.currFailedCount >= param.detecting.detectingCount {
+		log.Infof("cluster %s %s failover start", param.clusterName, param.clusterNamespace)
+		//获取secondary节点信息
+		var nodeList []*NodeInfo
+		for _, v := range *param.podList {
+			if v.PodName != primaryPod.PodName {
+				if resp, err := getStatByHost(v.HostName, v.Domain, param); err == nil {
+					nodeInfo, _ := ParseNodeInfo(v.PodName, v.HostName, v.Domain, resp)
+					nodeList = append(nodeList, nodeInfo)
+				} else {
+					log.Errorf("err: %s", err.Error())
 				}
 			}
 		}
-		if detectingFailed {
-			param.currFailedCount++
-		} else {
-			param.currFailedCount = 0
+
+		//找一个secondary节点，切成主
+		var secondaryNodeList []*NodeInfo
+		for i := 0; i < len(nodeList); i++ {
+			if nodeList[i].SourceServerName == primaryPod.ServerName {
+				secondaryNodeList = append(secondaryNodeList, nodeList[i])
+			}
 		}
 
-		//进行故障转移
-		if param.currFailedCount >= param.detecting.detectingCount {
-			log.Infof("cluster %s %s failover start", param.clusterName, param.clusterNamespace)
-			//获取secondary节点信息
-			var nodeList []*NodeInfo
-			for _, v := range *param.podList {
-				if v.PodName != primaryPod.PodName {
-					if resp, err := getStatByHost(v.HostName, v.Domain, param); err == nil {
-						if resp.Code == "0" {
-							if val, ok := resp.Data.(string); ok {
-								nodeInfo, _ := ParseNodeInfo(v.PodName, v.HostName, v.Domain, val)
-								nodeList = append(nodeList, nodeInfo)
-							}
-						}
-					} else {
-						log.Errorf("err: %s", err.Error())
-					}
-				}
-			}
-
-			//找一个secondary节点，切成主
-			var secondaryNode *NodeInfo
-			for _, v := range nodeList {
-				if v.SourceServerName == primaryPod.ServerName {
-					secondaryNode = v
-					break
-				}
-			}
-
-			//切主
-			if secondaryNode != nil {
+		//切主
+		if len(secondaryNodeList) != 0 {
+			for _, secondaryNode := range secondaryNodeList {
+				//secondaryNode := v
 				cmdBuilder := strings.Builder{}
+				var addNodesTemp []string
 				for _, v := range *param.podList {
 					if v.PodName != secondaryNode.PodName {
 						cmdBuilder.WriteString(" && onmode -d add RSS ")
 						cmdBuilder.WriteString(v.ServerName)
+						addNodesTemp = append(addNodesTemp, v.ServerName)
 					}
 				}
 
@@ -233,31 +245,36 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 					_, stderr, err := execByHost(secondaryNode.HostName, secondaryNode.Domain, "source /env.sh && onmode -d standard"+cmdBuilder.String(), param)
 					if err != nil {
 						log.Errorf("failover failed, err: %s", err)
+						continue
 					} else {
 						param.currFailedCount = 0
-						param.primaryPod = &secondaryNode.NodeBasicInfo
-
-						//激活更新集群
-						select {
-						case param.activeUpdateCluster <- 1:
-						default:
+						param.primaryPod = secondaryNode
+						for _, v := range addNodesTemp {
+							param.primaryPod.SubStatus = append(param.primaryPod.SubStatus, SubStatus{ServerName: v, Connected: false})
 						}
 
 						if stderr != "" {
 							log.Errorf("cluster %s %s failover failed, message: %s", param.clusterName, param.clusterNamespace, stderr)
 						} else {
-							for _, v := range nodeList {
-								if (v.PodName != secondaryNode.PodName) && (v.ServerType == GBASE8S_ROLE_RSS) {
+							for _, node := range nodeList {
+								if (node.PodName != secondaryNode.PodName) && (node.ServerType == GBASE8S_ROLE_RSS) {
 									rssCmd := "source /env.sh && curl -o tape http://" +
 										secondaryNode.PodName +
 										"." +
 										secondaryNode.Domain +
 										":8000/hac/getTape && sh /recover.sh tape && onmode -d RSS " +
 										secondaryNode.ServerName
-									log.Infof("secondary: %s, add to cluster", v.PodName)
-									_, stderr, err := execByHost(v.HostName, v.Domain, rssCmd, param)
+									log.Infof("secondary: %s, add to cluster", node.PodName)
+									_, stderr, err := execByHost(node.HostName, node.Domain, rssCmd, param)
 									if err != nil {
-										log.Errorf("secondary %s add to cluster failed, err: %s stderr: %s", v.PodName, err.Error(), stderr)
+										log.Errorf("secondary %s add to cluster failed, err: %s stderr: %s", node.PodName, err.Error(), stderr)
+									} else {
+										for _, v := range param.primaryPod.SubStatus {
+											if v.ServerName == node.ServerName {
+												v.Connected = true
+												break
+											}
+										}
 									}
 								}
 							}
@@ -277,16 +294,21 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 							//	}
 							//}
 						}
+
+						//激活更新集群
+						select {
+						case param.activeUpdateCluster <- 1:
+						default:
+						}
 					}
 				}
-			} else {
-				log.Errorf("cannot find failover node, cluster: %s, namespace: %s", param.clusterName, param.clusterNamespace)
 			}
-
-			log.Infof("cluster %s %s failover end", param.clusterName, param.clusterNamespace)
+		} else {
+			log.Errorf("cannot find failover node, cluster: %s, namespace: %s", param.clusterName, param.clusterNamespace)
 		}
-	}
 
+		log.Infof("cluster %s %s failover end", param.clusterName, param.clusterNamespace)
+	}
 }
 
 /*
@@ -306,19 +328,26 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 1废主 1主 2备。 ---已经切主，废主变备
 4废主。 ---不知所措
 */
-func findRealGbase8sPrimary(nodes *[]NodeInfo, param *clusterManager) (*NodeInfo, error) {
+func findRealGbase8sPrimary(nodes []*NodeInfo, param *clusterManager) (*NodeInfo, error) {
 	if param.primaryPod != nil {
-		for i := 0; i < len(*nodes); i++ {
-			v := &(*nodes)[i]
-			if param.primaryPod.PodName == v.PodName {
-				return v, nil
-			}
-		}
+		return param.primaryPod, nil
+		//for _, v := range nodes {
+		//	if param.primaryPod.PodName == v.PodName {
+		//		return v, nil
+		//	}
+		//}
+		//
+		//return errors.New("cannot find primary node, it ca")
+		//for i := 0; i < len(nodes); i++ {
+		//	v := &(nodes)[i]
+		//	if param.primaryPod.PodName == v.PodName {
+		//		return v, nil
+		//	}
+		//}
 	}
 
 	var primaryNode, secondaryNode, standardNode []*NodeInfo
-	for i := 0; i < len(*nodes); i++ {
-		v := &(*nodes)[i]
+	for _, v := range nodes {
 		if v.ServerType == GBASE8S_ROLE_PRIMARY {
 			if v.Connected {
 				return v, nil
@@ -330,8 +359,21 @@ func findRealGbase8sPrimary(nodes *[]NodeInfo, param *clusterManager) (*NodeInfo
 			standardNode = append(standardNode, v)
 		}
 	}
+	//for i := 0; i < len(nodes); i++ {
+	//	v := &(nodes)[i]
+	//	if v.ServerType == GBASE8S_ROLE_PRIMARY {
+	//		if v.Connected {
+	//			return v, nil
+	//		}
+	//		primaryNode = append(primaryNode, v)
+	//	} else if v.ServerType == GBASE8S_ROLE_RSS {
+	//		secondaryNode = append(secondaryNode, v)
+	//	} else {
+	//		standardNode = append(standardNode, v)
+	//	}
+	//}
 
-	if (len(standardNode) != 0) && (len(standardNode) == len(*nodes)) {
+	if (len(standardNode) != 0) && (len(standardNode) == len(nodes)) {
 		pNode := standardNode[0]
 		for _, v := range standardNode {
 			if v.PodName < pNode.PodName {
@@ -372,8 +414,8 @@ func findRealGbase8sPrimary(nodes *[]NodeInfo, param *clusterManager) (*NodeInfo
 	//}
 }
 
-func isGbase8sClusterNormal(nodes *[]NodeInfo) bool {
-	for _, v := range *nodes {
+func isGbase8sClusterNormal(nodes []*NodeInfo) bool {
+	for _, v := range nodes {
 		if !v.Connected {
 			return false
 		}
@@ -381,8 +423,8 @@ func isGbase8sClusterNormal(nodes *[]NodeInfo) bool {
 	return true
 }
 
-func (c *ClusterManager) getNodesRssStatus(pods *corev1.PodList, domain string) (*[]NodeInfo, error) {
-	var nodes []NodeInfo
+func (c *ClusterManager) getNodesRssStatus(pods *corev1.PodList, domain string) ([]*NodeInfo, error) {
+	var nodes []*NodeInfo
 	onstatCmd := []string{"bash", "-c", "source /env.sh && onstat -g rss verbose"}
 	for _, v := range pods.Items {
 		stdout, stderr, err := c.execClient.Exec(onstatCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
@@ -393,10 +435,24 @@ func (c *ClusterManager) getNodesRssStatus(pods *corev1.PodList, domain string) 
 		}
 
 		nodeInfo, _ := ParseNodeInfo(v.Name, v.Spec.Hostname, domain, stdout)
-		nodes = append(nodes, *nodeInfo)
+		nodes = append(nodes, nodeInfo)
 	}
 
-	return &nodes, nil
+	return nodes, nil
+}
+
+func (c *ClusterManager) getOnlineNodesRssStatus(pods *corev1.PodList, domain string) []*NodeInfo {
+	var nodes []*NodeInfo
+	onstatCmd := []string{"bash", "-c", "source /env.sh && onstat -g rss verbose"}
+	for _, v := range pods.Items {
+		stdout, _, err := c.execClient.Exec(onstatCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
+		if err == nil {
+			nodeInfo, _ := ParseNodeInfo(v.Name, v.Spec.Hostname, domain, stdout)
+			nodes = append(nodes, nodeInfo)
+		}
+	}
+
+	return nodes
 }
 
 func (c *ClusterManager) isAllNodesServiceRunning(pods *corev1.PodList) bool {
@@ -418,6 +474,79 @@ func (c *ClusterManager) isAllNodesServiceRunning(pods *corev1.PodList) bool {
 	}
 
 	return isAllRunning
+}
+
+//添加辅节点
+func (c *ClusterManager) addSecondary(primary *NodeInfo, onlineNodes []*NodeInfo, namespace string) error {
+	var addNodes strings.Builder
+	var addNodesTemp []*NodeInfo
+	for _, v := range onlineNodes {
+		if v.PodName != primary.PodName {
+			bfind := false
+			for _, vs := range primary.SubStatus {
+				if vs.ServerName == v.ServerName {
+					bfind = true
+					break
+				}
+			}
+			if !bfind {
+				addNodes.WriteString("&& onmode -d add RSS ")
+				addNodes.WriteString(v.ServerName)
+				addNodesTemp = append(addNodesTemp, v)
+			}
+		}
+	}
+	if addNodes.Len() != 0 {
+		addCmd := []string{"bash", "-c", "source /env.sh" + addNodes.String()}
+		log.Infof("primary: %s, add cmd: %s", primary.PodName, addNodes.String())
+		_, stderr, err := c.execClient.Exec(addCmd, GBASE8S_CONTAINER_NAME, primary.PodName, namespace, nil)
+		if err != nil {
+			return errors.New(fmt.Sprintf("add rss failed, exec pod: %s, err: %s, %s", primary.PodName, err.Error(), stderr))
+		} else {
+			for _, v := range addNodesTemp {
+				primary.SubStatus = append(primary.SubStatus, SubStatus{ServerName: v.ServerName, Connected: false})
+			}
+		}
+	}
+
+	return nil
+}
+
+//设置为辅节点
+func (c *ClusterManager) setRssServerType(primary *NodeInfo, onlineNodes []*NodeInfo, namespace string) error {
+	hasError := false
+	for _, v := range onlineNodes {
+		if (v.PodName != primary.PodName) && (v.SourceServerName != primary.ServerName) {
+			bFind := false
+			for _, status := range primary.SubStatus {
+				if status.ServerName == v.ServerName {
+					bFind = true
+				}
+			}
+			if !bFind {
+				hasError = true
+				continue
+			}
+
+			rssCmd := []string{"bash", "-c", "source /env.sh && curl -o tape http://" +
+				primary.PodName +
+				"." +
+				primary.Domain +
+				":8000/hac/getTape && sh /recover.sh tape && onmode -d RSS " +
+				primary.ServerName}
+			log.Infof("secondary: %s, add to cluster", v.PodName)
+			_, stderr, err := c.execClient.Exec(rssCmd, GBASE8S_CONTAINER_NAME, v.PodName, namespace, nil)
+			if err != nil {
+				log.Error(fmt.Sprintf("exec rss failed, exec pod: %s, err: %s, %s", v.PodName, err.Error(), stderr))
+				hasError = true
+			}
+		}
+	}
+
+	if hasError {
+		return errors.New("")
+	}
+	return nil
 }
 
 func (c *ClusterManager) procUpdateGbase8sCluster(param *clusterManager) error {
@@ -451,95 +580,73 @@ func (c *ClusterManager) procUpdateGbase8sCluster(param *clusterManager) error {
 		return errors.New("wait")
 	}
 
-	//如果有pod没在运行状态，等待
-	flag := 1
-	for _, v := range gPods.Items {
-		if len(v.Status.ContainerStatuses) != 0 {
-			if v.Status.ContainerStatuses[0].State.Running == nil {
-				flag = 0
-				break
-			}
+	if param.primaryPod != nil {
+		nodes := c.getOnlineNodesRssStatus(gPods, (*param.podList)[0].Domain)
+		if len(nodes) == 0 {
+			return errors.New("wait")
 		}
-	}
-	if flag == 0 {
-		return errors.New("wait")
-	}
-
-	//判断容器内服务是否已经启动，没启动就等待
-	if !c.isAllNodesServiceRunning(gPods) {
-		return errors.New("wait")
-	}
-
-	//获取所有容器的rss状态
-	nodes, err := c.getNodesRssStatus(gPods, (*param.podList)[0].Domain)
-	if err != nil {
-		log.Errorf("update gbase8s cluster failed, %s", err.Error())
-		return errors.New("wait")
-	}
-
-	needWait := false
-	for _, v := range *nodes {
-		if v.ServerStatus == GBASE8S_STATUS_NONE ||
-			v.ServerStatus == GBASE8S_STATUS_INIT ||
-			v.ServerStatus == GBASE8S_STATUS_FAST_RECOVERY {
-			needWait = true
-			break
+		if err := c.addSecondary(param.primaryPod, nodes, param.clusterNamespace); err != nil {
+			return errors.New("wait")
 		}
-	}
-	if needWait {
-		return errors.New("wait")
-	}
-
-	if isGbase8sClusterNormal(nodes) {
-		return nil
-	}
-
-	p, err := findRealGbase8sPrimary(nodes, param)
-	if err != nil {
-		return err
-	}
-
-	//向主节点添加辅节点
-	var addNodes strings.Builder
-	for _, v := range *nodes {
-		if v.PodName != p.PodName && !v.Connected {
-			bfind := false
-			for _, vs := range p.SubStatus {
-				if vs.ServerName == v.ServerName {
-					bfind = true
+		if err := c.setRssServerType(param.primaryPod, nodes, param.clusterNamespace); err != nil {
+			return errors.New("wait")
+		}
+	} else {
+		//如果有pod没在运行状态，等待
+		flag := 1
+		for _, v := range gPods.Items {
+			if len(v.Status.ContainerStatuses) != 0 {
+				if v.Status.ContainerStatuses[0].State.Running == nil {
+					flag = 0
 					break
 				}
 			}
-			if !bfind {
-				addNodes.WriteString("&& onmode -d add RSS ")
-				addNodes.WriteString(v.ServerName)
-			}
 		}
-	}
-	if addNodes.Len() != 0 {
-		addCmd := []string{"bash", "-c", "source /env.sh" + addNodes.String()}
-		log.Infof("primary: %s, add cmd: %s", p.PodName, addNodes.String())
-		_, stderr, err := c.execClient.Exec(addCmd, GBASE8S_CONTAINER_NAME, p.PodName, param.clusterNamespace, nil)
-		if err != nil {
-			return errors.New(fmt.Sprintf("add rss failed, exec pod: %s, err: %s, %s", p.PodName, err.Error(), stderr))
+		if flag == 0 {
+			return errors.New("wait")
 		}
-	}
 
-	//辅节点加入集群
-	for _, v := range *nodes {
-		if (v.PodName != p.PodName) && (!v.Connected) && (v.SourceServerName != p.ServerName) {
-			rssCmd := []string{"bash", "-c", "source /env.sh && curl -o tape http://" +
-				p.PodName +
-				"." +
-				(*param.podList)[0].Domain +
-				":8000/hac/getTape && sh /recover.sh tape && onmode -d RSS " +
-				p.ServerName}
-			log.Infof("secondary: %s, add to cluster", v.PodName)
-			_, stderr, err := c.execClient.Exec(rssCmd, GBASE8S_CONTAINER_NAME, v.PodName, param.clusterNamespace, nil)
-			if err != nil {
-				return errors.New(fmt.Sprintf("exec rss failed, exec pod: %s, err: %s, %s", v.PodName, err.Error(), stderr))
+		//判断容器内服务是否已经启动，没启动就等待
+		if !c.isAllNodesServiceRunning(gPods) {
+			return errors.New("wait")
+		}
+
+		//获取所有容器的rss状态
+		nodes, err := c.getNodesRssStatus(gPods, (*param.podList)[0].Domain)
+		if err != nil {
+			log.Errorf("update gbase8s cluster failed, %s", err.Error())
+			return errors.New("wait")
+		}
+
+		needWait := false
+		for _, v := range nodes {
+			if v.ServerStatus == GBASE8S_STATUS_NONE ||
+				v.ServerStatus == GBASE8S_STATUS_INIT ||
+				v.ServerStatus == GBASE8S_STATUS_FAST_RECOVERY {
+				needWait = true
+				break
 			}
 		}
+		if needWait {
+			return errors.New("wait")
+		}
+
+		if isGbase8sClusterNormal(nodes) {
+			return nil
+		}
+
+		p, err := findRealGbase8sPrimary(nodes, param)
+		if err != nil {
+			return err
+		}
+
+		if err := c.addSecondary(p, nodes, param.clusterNamespace); err != nil {
+			return errors.New("wait")
+		}
+		if err := c.setRssServerType(p, nodes, param.clusterNamespace); err != nil {
+			return errors.New("wait")
+		}
+
 	}
 
 	return nil
@@ -632,6 +739,12 @@ func (c *ClusterManager) procUpdateCmCluster(param *clusterManager) error {
 }
 
 func (c *ClusterManager) startDetecting(param *clusterManager) error {
+	param.detectingFlag = true
+
+	if param.primaryPod != nil {
+		return nil
+	}
+
 	//获取主节点
 	pods, err := GetAllPods(param.clusterNamespace, &map[string]string{
 		GBASE8S_POD_LABEL_KEY: GBASE8S_POD_LABEL_VALUE_PREFIX + param.clusterName,
@@ -644,31 +757,22 @@ func (c *ClusterManager) startDetecting(param *clusterManager) error {
 		return err
 	}
 
-	var pNode *NodeInfo
-	for _, v := range *nodes {
+	for _, v := range nodes {
 		if v.ServerType == GBASE8S_ROLE_PRIMARY {
-			pNode = &v
+			param.primaryPod = v
 			break
 		}
 	}
 
-	//更新主节点
-	if pNode != nil {
-		param.primaryPod = &NodeBasicInfo{
-			PodName:    pNode.PodName,
-			Namespace:  pNode.Namespace,
-			HostName:   pNode.HostName,
-			Domain:     pNode.Domain,
-			ServerName: pNode.ServerName,
-		}
-		return nil
-	} else {
+	if param.primaryPod == nil {
 		return errors.New("find primary node failed")
 	}
+
+	return nil
 }
 
 func (c *ClusterManager) stopDetecting(param *clusterManager) {
-	param.primaryPod = nil
+	param.detectingFlag = false
 }
 
 func (c *ClusterManager) clusterThread(param *clusterManager) {
@@ -767,6 +871,7 @@ func (c *ClusterManager) AddCluster(clusterName, clusterNamespace string, podLis
 				timeout:           timeout,
 			},
 			currFailedCount:            0,
+			detectingFlag:              false,
 			primaryPod:                 nil,
 			podList:                    podList,
 			detectingHttpClient:        util.NewHttpClient().SetTimeout(time.Duration(timeout)),
