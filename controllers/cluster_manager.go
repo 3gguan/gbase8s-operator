@@ -300,6 +300,8 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 						case param.activeUpdateCluster <- 1:
 						default:
 						}
+
+						break
 					}
 				}
 			}
