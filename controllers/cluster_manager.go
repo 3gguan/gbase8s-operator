@@ -593,6 +593,9 @@ func (c *ClusterManager) procUpdateGbase8sCluster(param *clusterManager) error {
 		if err := c.setRssServerType(param.primaryPod, nodes, param.clusterNamespace); err != nil {
 			return errors.New("wait")
 		}
+		if len(nodes) != len(gPods.Items) {
+			return errors.New("wait")
+		}
 	} else {
 		//如果有pod没在运行状态，等待
 		flag := 1
