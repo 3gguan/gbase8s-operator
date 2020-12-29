@@ -102,10 +102,12 @@ func (c *ClusterManager) procModifyParam(param *clusterManager, queueMsg *CfgQue
 	case FAILOVER_MSGTYPE_DETECTING:
 		if v, ok := queueMsg.Data.(*detecting); ok {
 			if param.detecting.detectingCount != v.detectingCount {
+				log.Infof("modify detecting count for cluster %s %s", param.clusterName, param.clusterNamespace)
 				param.detecting.detectingCount = v.detectingCount
 				param.currFailedCount = 0
 			}
 			if param.detecting.detectingInterval != v.detectingInterval {
+				log.Infof("modify detecting interval for cluster %s %s", param.clusterName, param.clusterNamespace)
 				param.detecting.detectingInterval = v.detectingInterval
 				param.currFailedCount = 0
 				param.detectingTicker.Reset(time.Duration(v.detectingInterval) * time.Second)
@@ -185,20 +187,28 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 		return
 	}
 
-	log.Infof("detecting %s", param.primaryPod.PodName)
-
 	//发送探测请求
 	detectingFailed := false
+	var tmpErr error
 	if resp, err := getStatByHost(primaryPod.HostName, primaryPod.Domain, param); err != nil {
 		detectingFailed = true
+		tmpErr = err
 	} else {
 		if strings.Contains(resp, "shared memory not initialized") {
 			detectingFailed = true
 		}
 	}
 	if detectingFailed {
+		if tmpErr != nil {
+			log.Infof("detecting %s failed, err: %s", param.primaryPod.PodName, tmpErr.Error())
+		} else {
+			log.Infof("detecting %s failed", param.primaryPod.PodName)
+		}
+
+		log.Infof("failed count: %d, total count: %d", param.currFailedCount, param.detecting.detectingCount)
 		param.currFailedCount++
 	} else {
+		log.Infof("detecting %s success", param.primaryPod.PodName)
 		param.currFailedCount = 0
 	}
 
@@ -218,6 +228,13 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 			}
 		}
 
+		logStr := ""
+		for _, v := range nodeList {
+			logStr += v.PodName
+			logStr += " "
+		}
+		log.Infof("all node: %s", logStr)
+
 		//找一个secondary节点，切成主
 		var secondaryNodeList []*NodeInfo
 		for i := 0; i < len(nodeList); i++ {
@@ -225,6 +242,13 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 				secondaryNodeList = append(secondaryNodeList, nodeList[i])
 			}
 		}
+
+		logStr = ""
+		for _, v := range nodeList {
+			logStr += v.PodName
+			logStr += " "
+		}
+		log.Infof("secondary node: %s", logStr)
 
 		//切主
 		if len(secondaryNodeList) != 0 {
@@ -303,6 +327,8 @@ func (c *ClusterManager) procFailover(param *clusterManager) {
 
 						break
 					}
+				} else {
+					log.Infof("cluster %s %s failover failed, secondary node in primary %s", param.clusterName, param.clusterNamespace, secondaryNode.PodName)
 				}
 			}
 		} else {
@@ -467,7 +493,7 @@ func (c *ClusterManager) isAllNodesServiceRunning(pods *corev1.PodList) bool {
 			isAllRunning = false
 			break
 		} else {
-			if stdout != "2\n" {
+			if stdout != "2\n" && stdout != "2\r\n" && stdout != "2" {
 				log.Infof("pod %s %s is not running", v.Name, v.Namespace)
 				isAllRunning = false
 				break
@@ -684,18 +710,6 @@ func (c *ClusterManager) procUpdateCmCluster(param *clusterManager) error {
 		return err
 	}
 
-	//cmPodLabels := map[string]string{
-	//	CM_POD_LABEL_KEY: CM_POD_LABEL_VALUE_PREFIX + gbase8sCluster.Name,
-	//}
-	//cmPods := &corev1.PodList{}
-	//opts := &client.ListOptions{
-	//	Namespace:     param.clusterName,
-	//	LabelSelector: labels.SelectorFromSet(cmPodLabels),
-	//}
-	//if err := c.List(ctx, cmPods, opts); err != nil {
-	//	return errors.New("get cm pods failed, err: " + err.Error())
-	//}
-
 	if cmExpectReplicas != int32(len(cmPods.Items)) {
 		return errors.New("wait")
 	}
@@ -723,7 +737,7 @@ func (c *ClusterManager) procUpdateCmCluster(param *clusterManager) error {
 		if err != nil {
 			return errors.New(fmt.Sprintf("get cm status failed, err: %s %s", err.Error(), stderr))
 		}
-		if stdout == "1\n" {
+		if stdout == "1\n" || stdout == "1\r\n" || stdout == "1" {
 			//if needReloadCm {
 			//	log.Infof("reload cm %s config", v.Name)
 			//	stdout, stderr, err := c.execClient.Exec(reloadCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
@@ -731,6 +745,7 @@ func (c *ClusterManager) procUpdateCmCluster(param *clusterManager) error {
 			//		return errors.New(fmt.Sprintf("reload cm failed, err: %s %s %s", err.Error(), stderr, stdout))
 			//	}
 			//}
+			log.Infof("cm %s is normal", v.Name)
 		} else {
 			log.Infof("start cm %s", v.Name)
 			_, stderr, err := c.execClient.Exec(startCmd, v.Spec.Containers[0].Name, v.Name, v.Namespace, nil)
@@ -780,6 +795,26 @@ func (c *ClusterManager) stopDetecting(param *clusterManager) {
 	param.detectingFlag = false
 }
 
+func startTimer(ticker *time.Ticker, d time.Duration) {
+	ticker.Reset(d)
+}
+
+func stopTimer(ticker *time.Ticker) {
+	ticker.Stop()
+	isOver := false
+	for {
+		select {
+		case <-ticker.C:
+		default:
+			isOver = true
+			break
+		}
+		if isOver {
+			break
+		}
+	}
+}
+
 func (c *ClusterManager) clusterThread(param *clusterManager) {
 	log.Infof("cluster thread %s %s start", param.clusterName, param.clusterNamespace)
 	stop := false
@@ -793,12 +828,12 @@ func (c *ClusterManager) clusterThread(param *clusterManager) {
 
 			if err := c.procUpdateGbase8sCluster(param); err != nil {
 				if err.Error() != "wait" {
-					param.updateGbase8sClusterTicker.Stop()
+					stopTimer(param.updateGbase8sClusterTicker)
 					log.Errorf("process update gbase8s cluster failed, err: %s", err.Error())
 				}
 			} else {
-				param.updateGbase8sClusterTicker.Stop()
-				param.updateCmClusterTicker.Reset(2 * time.Second)
+				stopTimer(param.updateGbase8sClusterTicker)
+				startTimer(param.updateCmClusterTicker, 2*time.Second)
 				if err := c.startDetecting(param); err != nil {
 					log.Errorf("start detecting %s %s failed, err: %s", param.clusterName, param.clusterNamespace, err.Error())
 				}
@@ -806,23 +841,23 @@ func (c *ClusterManager) clusterThread(param *clusterManager) {
 		case <-param.updateCmClusterTicker.C:
 			if err := c.procUpdateCmCluster(param); err != nil {
 				if err.Error() != "wait" {
-					param.updateCmClusterTicker.Stop()
+					stopTimer(param.updateCmClusterTicker)
 					log.Errorf("process update cm cluster failed, err: %s", err.Error())
 				}
 			} else {
-				param.updateCmClusterTicker.Stop()
+				stopTimer(param.updateCmClusterTicker)
 			}
 		case <-param.activeUpdateCluster:
-			param.updateGbase8sClusterTicker.Reset(3 * time.Second)
+			startTimer(param.updateGbase8sClusterTicker, 3*time.Second)
 		case <-param.destroyClusterManager:
 			stop = true
 			break
 		}
 
 		if stop {
-			param.updateCmClusterTicker.Stop()
-			param.updateGbase8sClusterTicker.Stop()
-			param.detectingTicker.Stop()
+			stopTimer(param.updateCmClusterTicker)
+			stopTimer(param.updateGbase8sClusterTicker)
+			stopTimer(param.detectingTicker)
 			close(param.activeUpdateCluster)
 			close(param.destroyClusterManager)
 
