@@ -136,6 +136,7 @@ func getPort(podName string) string {
 }
 
 func getStatByHost(host, domain string, param *clusterManager) (string, error) {
+	log.Infof("get status by host: %s.%s", host, domain)
 	url := fmt.Sprintf("http://%s.%s:%s/hac/getStatus", host, domain, GBASE8S_CONFIG_PORT)
 	//url := fmt.Sprintf("http://192.168.70.2:%s/hac/getStatus", getPort(host))
 	resp, err := param.detectingHttpClient.Get(url)
