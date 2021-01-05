@@ -8,9 +8,9 @@
 #roleBindingName: gbase8s-operator-manager-rolebinding
 
 # 命名空间配置，create为true时会自动创建命名空间，命名空间名称可自定义
-#namespace:
-#  create: true
-#  name: gbase8s-operator-system
+namespace:
+  create: true
+  name: gbase8s-operator-system
 
 # 镜像名称，可自定义
 image: gbase8s-cluster-controller:latest
