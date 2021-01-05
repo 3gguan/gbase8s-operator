@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "gbase8s-operator.name" . }}
+  namespace: {{ template "gbase8s-operator.namespace" . }}
+  labels:
+    control-plane: {{ template "gbase8s-operator.name" . }}
+spec:
+  selector:
+    matchLabels:
+      control-plane: {{ template "gbase8s-operator.name" . }}
+  replicas: {{ .Values.replicas | default "1" }}
+  template:
+    metadata:
+      labels:
+        control-plane: {{ template "gbase8s-operator.name" . }}
+    spec:
+      containers:
+      - command:
+        - /manager
+        args:
+        - --enable-leader-election
+        image: {{ .Values.image }}
+        name: manager
+        imagePullPolicy: {{ .Values.imagePullPolicy | default "IfNotPresent" }}
+        volumeMounts:
+        - mountPath: /logs
+          name: log
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - name: log
+        {{- if .Values.logPersistent }}
+        {{- toYaml .Values.logPersistent | nindent 8 }}
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+      {{- if .Values.nodeAffinity }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                {{- range .Values.nodeAffinity }}
+                - {{ . }}
+                {{- end }}
+      {{- end }}

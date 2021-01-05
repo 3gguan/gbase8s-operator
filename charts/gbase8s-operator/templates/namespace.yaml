@@ -1,0 +1,10 @@
+{{- if .Values.namespace}}
+{{- if and .Values.namespace.create (eq .Values.namespace.create true) }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    control-plane: {{ template "gbase8s-operator.name" . }}
+  name: {{ template "gbase8s-operator.namespace" . }}
+{{- end}}
+{{- end}}
