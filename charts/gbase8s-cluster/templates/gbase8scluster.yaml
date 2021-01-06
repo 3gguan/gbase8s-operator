@@ -15,7 +15,7 @@ spec:
     {{- end }}
     {{- if .Values.gbase8s.labels }}
     labels:
-    {{- toYaml .Values.gbase8s.labels | nindent 4 }}
+    {{- toYaml .Values.gbase8s.labels | nindent 6 }}
     {{- end }}
     failover:
       detectingCount: {{ .Values.gbase8s.failover.detectingCount }}

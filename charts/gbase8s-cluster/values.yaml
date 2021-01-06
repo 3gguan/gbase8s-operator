@@ -38,7 +38,9 @@ gbase8s:
     - name: CLIENT_LOCALE
       value: zh_cn.utf8
   # 标签配置，可选配置
-#  labels: []
+  labels:
+    aaa: aaa
+    bbb: bbb
   # 故障恢复配置
   failover:
     # 探测次数，探测主节点失败5次后，从节点会切换为主节点
@@ -93,7 +95,9 @@ connectManager:
     - name: CLIENT_LOCALE
       value: zh_cn.utf8
   # 标签配置，可选配置
-#  labels: []
+  labels:
+    aaa: aaa
+    bbb: bbb
   # 定义connect manager 重定向类型的服务名模版，真实的服务名为{服务名模版}_{connect manager序号}，如：cmredirect_0
   redirectTemplateName: cmredirect
   # 定义connect manager 代理类型的服务名模版，真实的服务名为{服务名模版}_{connect manager序号}，如：cmproxy_0
