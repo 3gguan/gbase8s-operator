@@ -39,7 +39,7 @@ spec:
     {{- end }}
     {{- if .Values.connectManager.labels }}
     labels:
-    {{- toYaml .Values.connectManager.labels | nindent 4 }}
+    {{- toYaml .Values.connectManager.labels | nindent 6 }}
     {{- end }}
     secretName: {{ template "gbase8s-cluster.secret" . }}
     redirectTemplateName: {{ .Values.connectManager.redirectTemplateName }}
