@@ -1,0 +1,120 @@
+# gbase8s hac 名称
+name: gbase8s-cluster1
+
+# connect manager gbasedbt用户密码
+cmPassword: gbasedbt123
+
+# gbase8s gbasedbt用户密码
+gbase8sPassword: gbasedbt123
+
+# configmap 名称，可选配置
+#configmap: gbase8s-conf
+
+# secret 名称，可选配置
+#secret: gbase8s-secret
+
+# connect manager service 名称，可选
+#cmService: gbase8s-service
+
+# 重定向方式集群内访问端口
+redirectPort: 10000
+# 重定向方式集群外访问端口
+redirectNodePort: 31110
+# 代理方式集群内访问端口
+proxyPort: 10001
+# 代理方式集群外访问端口
+proxyNodePort: 31111
+
+# gbase8s配置
+gbase8s:
+  # gbase8s个数，要大于1
+  replicas: 3
+  # gbase8s镜像名称
+  image: gbase8s:8.8
+  # gbase8s pod环境变量配置，目前只配置了支持中文
+  env:
+    - name: DB_LOCALE
+      value: zh_cn.utf8
+    - name: CLIENT_LOCALE
+      value: zh_cn.utf8
+  # 标签配置
+  labels: []
+  # 故障恢复配置
+  failover:
+    # 探测次数，探测主节点失败5次后，从节点会切换为主节点
+    detectingCount: 5
+    # 探测时间间隔，单位秒
+    detectingInterval: 2
+    # 探测超时时间，单位秒
+    timeout: 5
+  # 定义gbase8s server运行的kubernetes节点和持久化目录，nodes个数要和定义的gbase8s server
+  # 个数相同，gbase8s server pod会按顺序使用定义的nodes
+  nodes:
+    # 指定使用的kubernetes node
+    - name: master
+      # 指定数据持久化目录
+      storage:
+        path: /local/storage1
+        size: 2Gi
+        volumeMode: Filesystem
+      # 指定日志持久化目录
+      log:
+        path: /local/log1
+        size: 2Gi
+        volumeMode: Filesystem
+    - name: master
+      storage:
+        path: /local/storage2
+        size: 2Gi
+        volumeMode: Filesystem
+      log:
+        path: /local/log2
+        size: 2Gi
+        volumeMode: Filesystem
+    - name: master
+      storage:
+        path: /local/storage3
+        size: 2Gi
+        volumeMode: Filesystem
+      log:
+        path: /local/log3
+        size: 2Gi
+        volumeMode: Filesystem
+# connect manager配置
+connectManager:
+  # 定义connect manager的个数，可以增加或减少个数
+  replicas: 1
+  # 指定connect manager镜像名称
+  image: cm:8.8
+  # connect manager环境变量配置，目前只配置了支持中文
+  env:
+    - name: DB_LOCALE
+      value: zh_cn.utf8
+    - name: CLIENT_LOCALE
+      value: zh_cn.utf8
+  # 标签配置
+  labels: []
+  # 定义connect manager 重定向类型的服务名模版，真实的服务名为{服务名模版}_{connect manager序号}，如：cmredirect_0
+  redirectTemplateName: cmredirect
+  # 定义connect manager 代理类型的服务名模版，真实的服务名为{服务名模版}_{connect manager序号}，如：cmproxy_0
+  proxyTemplateName: cmproxy
+  # 定义connect manager运行的kubernetes节点和持久化目录，nodes个数要和定义的connect manager
+  # 个数相同，connect manager pod会按顺序使用定义的nodes
+  nodes:
+    # 指定使用的kubernetes node
+    - name: master
+      # 指定日志持久化目录
+      log:
+        path: /local/cmlog1
+        size: 2Gi
+        volumeMode: Filesystem
+    - name: master
+      log:
+        path: /local/cmlog2
+        size: 2Gi
+        volumeMode: Filesystem
+    - name: master
+      log:
+        path: /local/cmlog3
+        size: 2Gi
+        volumeMode: Filesystem

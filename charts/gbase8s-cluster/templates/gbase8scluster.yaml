@@ -1,0 +1,53 @@
+apiVersion: gbase8s.gbase.cn/v1
+kind: Gbase8sCluster
+metadata:
+  name: {{ .Values.name }}
+spec:
+  # Add fields here
+  # foo: bar
+  #namespace: default
+  gbase8s:
+    replicas: {{ .Values.gbase8s.replicas }}
+    image: {{ .Values.gbase8s.image }}
+    env:
+    {{- if .Values.gbase8s.env }}
+    {{- toYaml .Values.gbase8s.env | nindent 4 }}
+    {{- end }}
+    labels:
+    {{- if .Values.gbase8s.labels }}
+    {{- toYaml .Values.gbase8s.labels | nindent 4 }}
+    {{- end }}
+    failover:
+      detectingCount: {{ .Values.gbase8s.failover.detectingCount }}
+      detectingInterval: {{ .Values.gbase8s.failover.detectingInterval }}
+      timeout: {{ .Values.gbase8s.failover.timeout }}
+    secretName: {{ template "gbase8s-cluster.secret" . }}
+    configMap:
+      name: {{ template "gbase8s-cluster.configmap" . }}
+      onconfigKey: onconfig.ol_gbasedbt_1
+      allowedKey: allowed.surrogates
+    nodes:
+    {{- if .Values.gbase8s.nodes }}
+    {{- toYaml .Values.gbase8s.nodes | nindent 4 }}
+    {{- end }}
+  connectManager:
+    replicas: {{ .Values.connectManager.replicas }}
+    image: {{ .Values.connectManager.image }}
+    env:
+    {{- if .Values.connectManager.env }}
+    {{- toYaml .Values.connectManager.env | nindent 4 }}
+    {{- end }}
+    labels:
+    {{- if .Values.connectManager.labels }}
+    {{- toYaml .Values.connectManager.labels | nindent 4 }}
+    {{- end }}
+    secretName: {{ template "gbase8s-cluster.secret" . }}
+    redirectTemplateName: {{ .Values.connectManager.redirectTemplateName }}
+    proxyTemplateName: {{ .Values.connectManager.proxyTemplateName }}
+    configMap:
+      name: {{ template "gbase8s-cluster.configmap" . }}
+      configKey: cfg.cm
+    nodes:
+    {{- if .Values.connectManager.nodes }}
+    {{- toYaml .Values.connectManager.nodes | nindent 4 }}
+    {{- end }}

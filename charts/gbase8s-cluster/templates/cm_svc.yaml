@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "gbase8s-cluster.cm.svc" . }}
+spec:
+  type: NodePort
+  ports:
+    - name: redirect
+      port: {{ .Values.redirectPort | default "10000" }}
+      targetPort: 10000
+      nodePort: {{ .Values.redirectNodePort | default "31110" }}
+    - name: proxy
+      port: {{ .Values.proxyPort | default "10001" }}
+      targetPort: 10001
+      nodePort: {{ .Values.proxyNodePort | default "31111" }}
+  selector:
+    cm: cm-{{ .Values.name }}
