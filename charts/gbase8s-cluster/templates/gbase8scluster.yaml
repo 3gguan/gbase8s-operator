@@ -13,8 +13,8 @@ spec:
     {{- if .Values.gbase8s.env }}
     {{- toYaml .Values.gbase8s.env | nindent 4 }}
     {{- end }}
-    labels:
     {{- if .Values.gbase8s.labels }}
+    labels:
     {{- toYaml .Values.gbase8s.labels | nindent 4 }}
     {{- end }}
     failover:
@@ -37,8 +37,8 @@ spec:
     {{- if .Values.connectManager.env }}
     {{- toYaml .Values.connectManager.env | nindent 4 }}
     {{- end }}
-    labels:
     {{- if .Values.connectManager.labels }}
+    labels:
     {{- toYaml .Values.connectManager.labels | nindent 4 }}
     {{- end }}
     secretName: {{ template "gbase8s-cluster.secret" . }}
