@@ -9,4 +9,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: default
-  namespace: {{ template "gbase8s-operator.namespace" . }}
+  namespace: {{ .Release.Namespace }}

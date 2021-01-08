@@ -1,27 +1,22 @@
-# controller 名称，可自定义
+# controller 名称，可选配置
 #name: gbase8s-operator-controller-manager
 
-# 角色资源名称，可自定义
+# 角色资源名称，可选配置
 #roleName: gbase8s-operator-manager-role
 
-# 角色绑定资源名称，可自定义
+# 角色绑定资源名称，可选配置
 #roleBindingName: gbase8s-operator-manager-rolebinding
-
-# 命名空间配置，create为true时会自动创建命名空间，命名空间名称可自定义
-namespace:
-  create: true
-  name: gbase8s-operator-system
 
 # 镜像名称，可自定义
 image: gbase8s-cluster-controller:latest
 
 # 日志持久化配置
-#logPersistent:
-#  hostPath:
-#    path: /local/operator
+logPersistent:
+  hostPath:
+    path: /local/operator
 
 # 节点亲和性配置，可指定为kubernetes节点名称
-#nodeAffinity:
-#  - master
-#  - node1
+nodeAffinity:
+  - master
+  - node1
 

@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ template "gbase8s-operator.name" . }}
-  namespace: {{ template "gbase8s-operator.namespace" . }}
   labels:
     control-plane: {{ template "gbase8s-operator.name" . }}
 spec:
