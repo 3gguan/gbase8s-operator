@@ -31,12 +31,36 @@ gbase8s:
   replicas: 3
   # gbase8s镜像名称
   image: gbase8s:8.8
-  # gbase8s pod环境变量配置，目前只配置了支持中文
+  # gbase8s pod环境变量配置，配置了支持中文、dbspace初始化大小。
   env:
     - name: DB_LOCALE
       value: zh_cn.utf8
     - name: CLIENT_LOCALE
       value: zh_cn.utf8
+    # 物理日志dbspace初始化大小，默认128M，单位支持K,M,G
+    - name: INIT_PLOG_SIZE
+      value: 128M
+    # 逻辑日志dbspace初始化大小，默认128M，单位支持K,M,G
+    - name: INIT_LLOG_SIZE
+      value: 128M
+    # 临时表dbspace初始化大小，默认64M，单位支持K,M,G
+    - name: INIT_TEMP_SIZE
+      value: 64M
+    # 临时表dbsapce个数，默认2个
+    - name: INIT_TEMP_COUNT
+      value: "2"
+    # 数据表dbspace初始化大小，默认256M，单位支持K,M,G
+    - name: INIT_DATA_SIZE
+      value: 256M
+    # BLOB dbspace初始化大小，默认64M，单位支持K,M,G
+    - name: INIT_BLOB_SIZE
+      value: 64M
+    # BLOB page大小，2K的倍数，最终page大小为x2，默认为1（即2K）
+    - name: INIT_BLOB_PAGE_SIZE
+      value: "2"
+    # SBLOB dbspace初始化大小，默认64M，单位支持K,M,G
+    - name: INIT_SBLOB_SIZE
+      value: 64M
   # 标签配置，可选配置
 #  labels:
 #    aaa: aaa
